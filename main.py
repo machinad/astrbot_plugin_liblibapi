@@ -144,7 +144,7 @@ class MyPlugin(Star):
         logger.info(f"用户 {user_name} 发送了消息：{prompt}")
         img_url = str(self.text2img(prompt,self.width,self.height,self.steps))
         logger.info(img_url)
-        yield event.plain_result(img_url) # 发送一条纯文本消息
+        yield event.plain_result(f"结果已经输出到日志") # 发送一条纯文本消息
         message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
         logger.info(message_chain)
     async def terminate(self):
