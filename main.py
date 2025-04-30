@@ -2,6 +2,7 @@ from curses import nonl
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
+import astrbot.api.message_components as Comp
 import hmac
 import base64
 import time
@@ -138,7 +139,7 @@ class MyPlugin(Star):
     
     @filter.command("lib")
     async def lib(self, event: AstrMessageEvent):
-        user_name = event.get_sender_name()# 发送消息的用户昵称
+        #user_name = event.get_sender_name()# 发送消息的用户昵称
         message_str = event.message_str # 用户发的纯文本消息字符串
         parts = message_str.split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
