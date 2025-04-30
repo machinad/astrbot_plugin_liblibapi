@@ -142,11 +142,13 @@ class MyPlugin(Star):
         message_str = event.message_str # 用户发的纯文本消息字符串
         parts = message_str.split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
-        Progess = str(self.text2img(prompt,self.width,self.height,self.steps))# 调用文生图接口
+        Progess = self.text2img(prompt,self.width,self.height,self.steps)# 调用文生图接口
         pointsCost = Progess.get("data",{}).get("pointsCost",None)# 获取消耗点数
         accountBalance = Progess.get("data",{}).get("accountBalance",None)# 获取账户余额
         img_url = Progess.get("data",{}).get("imges",{[]})[0].get("imgeUrl",None)# 获取图片链接
-        if Progess.get("code") == 0:
+        code = Progess.get("code",None)# 获取状态码
+        msg = Progess.get("msg",None)# 获取状态码
+        if msg == 0:
             chain = [
                 Comp.At(qq=event.get_sender_id()), # At 消息发送者
                 Comp.Plain(f"图片已经生成，消耗点数：{pointsCost}，账户余额：{accountBalance}"), # 发送文本消息
@@ -157,7 +159,7 @@ class MyPlugin(Star):
             logger.info(message_chain)
             return
         else:
-            yield event.plain_result(f"图片生成失败，状态码:{Progess.get("code")} 原因：{Progess.get('msg')}")
+            yield event.plain_result(f"图片生成失败，状态码:{code} 原因：{msg}")
             return
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
