@@ -142,7 +142,8 @@ class MyPlugin(Star):
         parts = message_str.split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
         logger.info(f"用户 {user_name} 发送了消息：{prompt}")
-        img_url = self.text2img(prompt,self.width,self.height,self.steps)
+        img_url = str(self.text2img(prompt,self.width,self.height,self.steps))
+        logger.info(img_url)
         yield event.plain_result(img_url) # 发送一条纯文本消息
         message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
         logger.info(message_chain)
