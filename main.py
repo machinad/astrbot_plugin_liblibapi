@@ -145,7 +145,7 @@ class MyPlugin(Star):
         Progess = self.text2img(prompt,self.width,self.height,self.steps)# 调用文生图接口
         pointsCost = Progess.get("data",{}).get("pointsCost",None)# 获取消耗点数
         accountBalance = Progess.get("data",{}).get("accountBalance",None)# 获取账户余额
-        img_url = Progess.get("data",{}).get("imges",[{}])[0].get("imgeUrl",None)# 获取图片链接
+        img_url = Progess.get("data",{}).get("images",[{}])[0].get("imageUrl",None)# 获取图片链接
         code = Progess.get("code",None)# 获取状态码
         msg = Progess.get("msg",None)#获取错误信息
         if code == 0:
