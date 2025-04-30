@@ -8,7 +8,7 @@ import requests
 from datetime import datetime
 import hashlib
 import uuid
-@register("liblibApi", "machinad", "一个调取liblib在线工作流进行ai绘图的插件", "1.0.0")
+@register("liblibApi", "machinad", "一个调取liblib在线工作流进行ai绘图的插件", "1.0.1")
 class MyPlugin(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")
