@@ -13,8 +13,8 @@ class MyPlugin(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")
         self.sk = config.get("SecretKey")
-        self.width= int(config.get("width"))
-        self.height = int(config.get("height"))
+        self.width= config.get("width")
+        self.height = config.get("height")
         self.steps = int(config.get("num_inference_steps"))
         self.time_stamp = int(datetime.now().timestamp() * 1000)#获取当前时间戳
         self.signature_nonce = uuid.uuid1()#获取uuid
