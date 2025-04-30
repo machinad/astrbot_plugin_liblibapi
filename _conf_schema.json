@@ -14,7 +14,7 @@
     },
     "height": {
         "description": "生成图片的高度",
-        "type": "string",
+        "type": "int",
         "default": "1024",
         "hint": "图片分辨率的高度"
     },

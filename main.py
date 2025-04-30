@@ -140,9 +140,10 @@ class MyPlugin(Star):
         user_name = event.get_sender_name()# 发送消息的用户昵称
         message_str = event.message_str # 用户发的纯文本消息字符串
         parts = message_str.split(" ",1)
-        prompt = parts[1].strip() if len(parts) > 1 else ""
+        prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
+        logger.info(f"用户 {user_name} 发送了消息：{prompt}")
         img_url = self.text2img(prompt,self.width,self.height,self.steps)
-        yield event.plain_result(img_url+user_name) # 发送一条纯文本消息
+        yield event.plain_result(img_url) # 发送一条纯文本消息
         message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
         logger.info(message_chain)
     async def terminate(self):
