@@ -1,3 +1,4 @@
+from curses import nonl
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
@@ -141,11 +142,22 @@ class MyPlugin(Star):
         message_str = event.message_str # 用户发的纯文本消息字符串
         parts = message_str.split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
-        logger.info(f"用户 {user_name} 发送了消息：{prompt}")
-        img_url = str(self.text2img(prompt,self.width,self.height,self.steps))
-        logger.info(img_url)
-        yield event.plain_result(f"结果已经输出到日志") # 发送一条纯文本消息
-        message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
-        logger.info(message_chain)
+        Progess = str(self.text2img(prompt,self.width,self.height,self.steps))# 调用文生图接口
+        pointsCost = Progess.get("data",{}).get("pointsCost",None)# 获取消耗点数
+        accountBalance = Progess.get("data",{}).get("accountBalance",None)# 获取账户余额
+        img_url = Progess.get("data",{}).get("imges",{[]})[0].get("imgeUrl",None)# 获取图片链接
+        if Progess.get("code") == 0:
+            chain = [
+                Comp.At(qq=event.get_sender_id()), # At 消息发送者
+                Comp.Plain(f"图片已经生成，消耗点数：{pointsCost}，账户余额：{accountBalance}"), # 发送文本消息
+                Comp.Image.fromURL(img_url) # 从 URL 发送图片
+            ]
+            yield event.chain_result(chain)
+            message_chain = event.get_messages()
+            logger.info(message_chain)
+            return
+        else:
+            yield event.plain_result(f"图片生成失败，状态码:{Progess.get("code")} 原因：{Progess.get('msg')}")
+            return
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""

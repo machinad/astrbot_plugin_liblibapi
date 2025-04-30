@@ -9,8 +9,8 @@
     "SecretKey": {
         "description": "Secret密钥",
         "type": "string",
-        "default": "black-forest-labs/FLUX.1-dev",
-        "hint": "AI模型的名称"
+        "default": "SecretKey",
+        "hint": "请前往  https://www.liblib.art/apis 注册账号，并获取 AccessKey"
     },
     "height": {
         "description": "生成图片的高度",
