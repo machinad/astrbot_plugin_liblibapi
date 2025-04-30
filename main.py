@@ -147,8 +147,8 @@ class MyPlugin(Star):
         accountBalance = Progess.get("data",{}).get("accountBalance",None)# 获取账户余额
         img_url = Progess.get("data",{}).get("imges",[{}])[0].get("imgeUrl",None)# 获取图片链接
         code = Progess.get("code",None)# 获取状态码
-        msg = Progess.get("msg",None)# 获取状态码
-        if msg == 0:
+        msg = Progess.get("msg",None)#获取错误信息
+        if code == 0:
             chain = [
                 Comp.At(qq=event.get_sender_id()), # At 消息发送者
                 Comp.Plain(f"图片已经生成，消耗点数：{pointsCost}，账户余额：{accountBalance}"), # 发送文本消息
