@@ -10,22 +10,26 @@ import requests
 from datetime import datetime
 import hashlib
 import uuid
-@register("liblibApi", "machinad", "一个调取liblib在线工作流进行ai绘图的插件", "1.0.1")
+@register("liblibApi", "machinad", "一个调取liblib在线工作流进行ai绘图的插件", "1.0.2")
 class MyPlugin(Star):
     def __init__(self, context: Context, config: dict, interval=5):
-        self.ak = config.get("AccessKey")
-        self.sk = config.get("SecretKey")
-        self.width= config.get("width")
-        self.height = config.get("height")
-        self.steps = int(config.get("num_inference_steps"))
+        self.ak = config.get("AccessKey")#获取ak
+        self.sk = config.get("SecretKey")#获取sk
+        self.width= config.get("width")#获取宽度
+        self.height = config.get("height")#获取高度
+        self.steps = int(config.get("num_inference_steps"))#获取步数
+        self.imgType = config.get("imgType")#获取图片类型
+        self.modelId = config.get("modelId")#获取模型id
         self.time_stamp = int(datetime.now().timestamp() * 1000)#获取当前时间戳
         self.signature_nonce = uuid.uuid1()#获取uuid
         self.signature_img = self._hash_sk(self.sk, self.time_stamp, self.signature_nonce)#获取签名
-        self.signature_ultra_img = self._hash_ultra_sk(self.sk, self.time_stamp, self.signature_nonce)#获取签名
-        self.signature_status = self._hash_sk_status(self.sk, self.time_stamp, self.signature_nonce)#获取签名
+        self.singature_confyui = self._hash_confyui(self.sk, self.time_stamp, self.signature_nonce)#获取签名,confyui专用
+        self.signature_ultra_img = self._hash_ultra_sk(self.sk, self.time_stamp, self.signature_nonce)#获取签名,暂时无用，请忽略
+        self.signature_status = self._hash_sk_status(self.sk, self.time_stamp, self.signature_nonce)#获取签名,暂时无用，请忽略
         self.interval = interval
         self.headers = {'Content-Type': 'application/json'}
         self.text2img_url = self.get_image_url(self.ak, self.signature_img, self.time_stamp,self.signature_nonce)#获取url
+        self.confyui_url = self.get_confyui_url(self.ak, self.singature_confyui, self.time_stamp,self.signature_nonce)
         self.text2img_ultra_url = self.get_ultra_image_url(self.ak, self.signature_ultra_img, self.time_stamp,self.signature_nonce)
         self.generate_url = self.get_generate_url(self.ak, self.signature_status, self.time_stamp,self.signature_nonce)
         super().__init__(context)
@@ -37,7 +41,11 @@ class MyPlugin(Star):
         data = "/api/generate/webui/text2img" + "&" + str(s_time) + "&" + str(ro)
         s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()
         return s
-
+    def _hash_confyui(self,key,s_time,ro):
+        """加密sk"""
+        data = "/api/generate/comfyui/app" + "&" + str(s_time) + "&" + str(ro)
+        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()
+        return s
     def _hash_ultra_sk(self, key, s_time, ro):
         """加密sk"""
         data = "/api/generate/webui/text2img/ultra" + "&" + str(s_time) + "&" + str(ro)
@@ -54,6 +62,10 @@ class MyPlugin(Star):
         url = f"https://openapi.liblibai.cloud/api/generate/webui/text2img?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
         return url
 
+    def get_confyui_url(self, ak, signature, time_stamp, signature_nonce):
+        url = f"https://openapi.liblibai.cloud/api/generate/comfyui/app?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
+        return url
+
     def get_ultra_image_url(self, ak, signature, time_stamp, signature_nonce):
 
         url = f"https://openapi.liblibai.cloud/api/generate/webui/text2img/ultra?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
@@ -63,12 +75,12 @@ class MyPlugin(Star):
 
         url = f"https://openapi.liblibai.cloud/api/generate/webui/status?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
         return url
-    def text2img(self, message_str, width, height,steps):
+    def text2img(self, modelId,message_str, width, height,steps):
         ""
         """
         文生图全示例 json
         """
-        base_json = {
+        base_json1 = {
             "templateUuid": "e10adc3949ba59abbe56e057f20f883e",
             "generateParams": {
                 "checkPointId": "0ea388c7eb854be3ba3c6f65aac6bfd3",
@@ -100,6 +112,151 @@ class MyPlugin(Star):
                 },
             }
         }
+        model = {
+            "0":{
+                "templateUuid": "e10adc3949ba59abbe56e057f20f883e",
+                "generateParams":{
+                    "checkPointId": modelId,
+                    "vaeId": "",
+                    "prompt":message_str,
+                    "negativePrompt": "bad-artist, bad-artist-anime, bad-hands-5, bad-image-v2-39000, bad-picture-chill-75v, bad_prompt, bad_prompt_version2, badhandv4, NG_DeepNegative_V1_75T, EasyNegative,2girls, 3girls,,bad quality, poor quality, doll, disfigured, jpg, toy, bad anatomy, missing limbs, missing fingers, 3d, cgi",
+                    "clipSkip": 2,
+                    "sampler": 15,
+                    "steps": steps,
+                    "cfgScale": 7,
+                    "width": width,
+                    "height": height,
+                    "imgCount": 1,
+                    "randnSource": 0,
+                    "seed": -1,
+                    "restoreFaces": 0,
+                    "additionalNetwork":[
+                        {
+                            "modelId": "31360f2f031b4ff6b589412a52713fcf",
+                            "weight": 0.6
+                        }
+                    ],
+                    "hiResFixInfo":{
+                        "hiresSteps": 28,
+                        "hiresDenoisingStrength": 0.45,
+                        "upscaler": 10,
+                        "resizedWidth": width*2,
+                        "resizedHeight": height*2
+                    }
+                }
+            },
+            "1":{
+                "templateUuid": "6f7c4652458d4802969f8d089cf5b91f",
+                "generateParams":{
+                    "prompt": message_str,
+                    "steps": steps,
+                    "width": width,
+                    "height": height,
+                    "imgCount": 1,
+                    "seed": -1,
+                    "restoreFaces": 0,
+                    "additionalNetwork":[
+                        {
+                            "modelId": "169505112cee468b95d5e4a5db0e5669",
+                            "weight": 1.0
+                        }
+                    ]
+                }
+            },
+            "2":{
+                "templateUuid": "4df2efa0f18d46dc9758803e478eb51c",
+                "generateParams": {
+                "5": {
+                    "class_type": "EmptyLatentImage",
+                    "inputs": {
+                        "width": width,
+                        "height": height,
+                        "batch_size": 1
+                    }
+                },
+                "10": {
+                    "class_type": "UNETLoader",
+                    "inputs": {
+                        "unet_name": "412b427ddb674b4dbab9e5abd5ae6057",
+                        "weight_dtype": "fp8_e4m3fn"
+                    }
+                
+                },
+                "11": {
+                    "class_type": "DualCLIPLoader",
+                    "inputs": {
+                        "clip_name1": "clip_l",
+                        "clip_name2": "t5xxl_fp8_e4m3fn",
+                        "type": "flux",
+                        "device": "default"
+                    }
+                
+                },
+                "13": {
+                    "class_type": "LoraLoader",
+                    "inputs": {
+                        "lora_name": "92b126744e7b49dfb76202b094d406e9",
+                        "strength_model": 0.6,
+                        "strength_clip": 2
+                    }
+                },
+                "15": {
+                    "class_type": "CLIPTextEncodeFlux",
+                    "inputs": {
+                        "clip_l": "",
+                    "t5xxl": message_str,
+                    "guidance": 3.5
+                    }
+                
+                 },
+                "16": {
+                    "class_type": "VAELoader",
+                    "inputs": {
+                        "vae_name": "ae.sft"
+                    }
+                
+                 },
+                "17": {
+                    "class_type": "FluxSamplerParams+",
+                    "inputs": {
+                        "seed": "49375",
+                        "sampler": "euler",
+                        "scheduler": "simple",
+                        "steps": "15",
+                        "guidance": "3.5",
+                        "max_shift": "",
+                        "base_shift": "",
+                        "denoise": ""
+                    }
+                },
+                "19": {
+                    "class_type": "LoraLoader",
+                    "inputs": {
+                        "lora_name": "60cdd0badb844e039aa3cf0d9908f70e",
+                        "strength_model": 0.6,
+                        "strength_clip": 2
+                    }
+                },
+                "workflowUuid": "f454f4a44bc440ca9427ca48c931598e"
+                }
+            }
+        }
+        if not self.imgType:
+            logger.info("未设置图片类型，使用默认类型")
+            return 
+        else:
+            if self.imgType == 0 or self.imgType == 1:
+                logger.info("当前生图类型为{imgType},使用sd1.5/xl模式")
+                base_json = model[str(self.imgType)]
+                return self.run(base_json, self.text2img_url)
+            elif self.imgType == 2:
+                logger.info("当前生图类型为{imgType},使用confyui模式")
+                base_json = model[str(self.imgType)]
+                return self.run(base_json, self.confyui_url)
+            else:
+                logger.info("图片类型错误，或者数值超出大小")
+                return
+        base_json = model[str(self.imgType)]
         return self.run(base_json, self.text2img_url)
     def run(self, data, url, timeout=120):
         """
@@ -141,12 +298,17 @@ class MyPlugin(Star):
     async def lib(self, event: AstrMessageEvent):
         #user_name = event.get_sender_name()# 发送消息的用户昵称
         message_str = event.message_str # 用户发的纯文本消息字符串
+        logger.info(f"获取用户文本：{message_str}")
+        logger.info(f"文生图开始，生图类型为{self.imgType}")
         parts = message_str.split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
+        logger.info(f"获取用户提示词：{prompt}")
         Progess = self.text2img(prompt,self.width,self.height,self.steps)# 调用文生图接口
+        logger.info(f"文生图结束，返回结果：{Progess}")
         pointsCost = Progess.get("data",{}).get("pointsCost",None)# 获取消耗点数
         accountBalance = Progess.get("data",{}).get("accountBalance",None)# 获取账户余额
         img_url = Progess.get("data",{}).get("images",[{}])[0].get("imageUrl",None)# 获取图片链接
+        logger.info(f"获取图片链接：{img_url}")
         code = Progess.get("code",None)# 获取状态码
         msg = Progess.get("msg",None)#获取错误信息
         if code == 0:

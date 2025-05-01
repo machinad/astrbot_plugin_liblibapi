@@ -12,6 +12,12 @@
         "default": "SecretKey",
         "hint": "请前往  https://www.liblib.art/apis 注册账号，并获取 AccessKey"
     },
+    "modelId": {
+        "description": "模型ID",
+        "type": "string",
+        "default": "0ea388c7eb854be3ba3c6f65aac6bfd3",   
+        "hint": "https://www.liblib.art点击要使用的模型,在浏览器url处获取模型链接结尾的version_uuid"
+    },
     "height": {
         "description": "生成图片的高度",
         "type": "int",
@@ -36,10 +42,10 @@
         "default": "随机",
         "hint": "用于控制生成结果的随机性，输入'随机'则自动生成随机种子"
     },
-    "enable_translation": {
-        "description": "启用中文翻译",
-        "type": "bool",
-        "default": true,
-        "hint": "是否自动将中文提示词翻译成英文提示词"
+    "imgType": {
+        "description": "生成图片的模式，",
+        "type": "int",
+        "default": 0,
+        "hint": "0=1.5/XL模式(可自定义模型)，1=flux模式，2=confyui模式"
     }
 }

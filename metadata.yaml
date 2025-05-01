@@ -1,5 +1,5 @@
 name: liblibApi # 这是你的插件的唯一识别名。
 desc: 一个可以调用liblibApi的confyui工作流进行文生图的插件。 # 插件简短描述
-version: v1.0.1 # 插件版本号。格式：v1.1.1 或者 v1.1
+version: v1.0.2 # 插件版本号。格式：v1.1.1 或者 v1.1
 author: machinad # 作者
 repo: https://github.com/machinad/astrbot_plugin_liblibapi.git # 插件的仓库地址
