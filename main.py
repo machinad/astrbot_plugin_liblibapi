@@ -10,6 +10,21 @@ import requests
 from datetime import datetime
 import hashlib
 import uuid
+class text2imgConfig:
+    def __init__(self,width,height,steps,mgType,modelId,sd_loraModelId,sd_loraWeight,flux_loraModelId,flux_loraWeight,message_str,isS,isF):
+        self.width = width
+        self.height = height
+        self.steps = steps
+        self.mgType = mgType
+        self.modelId = modelId
+        self.sd_loraModelId = sd_loraModelId
+        self.sd_loraWeight = sd_loraWeight
+        self.flux_loraModelId = flux_loraModelId
+        self.flux_loraWeight = flux_loraWeight
+        self.message_str = message_str
+        self.isSdLora = isS
+        self.isFluxLora = isF
+
 @register("liblibApi", "machinad", "一个调取liblib在线工作流进行ai绘图的插件", "1.0.3")
 class MyPlugin(Star):
     def __init__(self, context: Context, config: dict, interval=5):
@@ -24,12 +39,14 @@ class MyPlugin(Star):
         self.sd_loraWeight = config.get("sd_lora_scale")#获取权重
         self.flux_loraModelId = config.get("flux_lora_modelid")#获取模型id
         self.flux_loraWeight = config.get("flux_lora_scale")#获取权重
+        self.isSdLora = config.get("is_SdLora")#获取是否使用lora
+        self.isFluxLora = config.get("is_fluxLora")#获取是否使用lora
         self.time_stamp = int(datetime.now().timestamp() * 1000)#获取当前时间戳
         self.signature_nonce = uuid.uuid1()#获取uuid
         self.signature_img = self._hash_sk(self.sk, self.time_stamp, self.signature_nonce)#获取签名
         self.singature_confyui = self._hash_confyui(self.sk, self.time_stamp, self.signature_nonce)#获取签名,confyui专用
         self.signature_ultra_img = self._hash_ultra_sk(self.sk, self.time_stamp, self.signature_nonce)#获取签名,暂时无用，请忽略
-        self.signature_status = self._hash_sk_status(self.sk, self.time_stamp, self.signature_nonce)#获取签名,暂时无用，请忽略
+        self.signature_status = self._hash_sk_status(self.sk, self.time_stamp, self.signature_nonce)#获取签名,用于获取状态
         self.interval = interval
         self.headers = {'Content-Type': 'application/json'}
         self.text2img_url = self.get_image_url(self.ak, self.signature_img, self.time_stamp,self.signature_nonce)#获取url
@@ -79,19 +96,8 @@ class MyPlugin(Star):
 
         url = f"https://openapi.liblibai.cloud/api/generate/webui/status?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
         return url
-    class text2imgConfig:
-        def __init__(self,width,height,steps,mgType,modelId,sd_loraModelId,sd_loraWeight,flux_loraModelId,flux_loraWeight,message_str):
-            self.width = width
-            self.height = height
-            self.steps = steps
-            self.mgType = mgType
-            self.modelId = modelId
-            self.sd_loraModelId = sd_loraModelId
-            self.sd_loraWeight = sd_loraWeight
-            self.flux_loraModelId = flux_loraModelId
-            self.flux_loraWeight = flux_loraWeight
-            self.message_str = message_str
-    def text2img(self, config : text2imgConfig):
+
+    def text2img(self, config: text2imgConfig):
         model = {
             "sd1.5/XL模式(可自定义模型)":{
                 "templateUuid": "e10adc3949ba59abbe56e057f20f883e",
@@ -125,7 +131,7 @@ class MyPlugin(Star):
                     }
                 }
             },
-            "flux模式(仅可自定义lora模型)":{
+            "flux模式":{
                 "templateUuid": "6f7c4652458d4802969f8d089cf5b91f",
                 "generateParams":{
                     "prompt": config.message_str,
@@ -223,19 +229,43 @@ class MyPlugin(Star):
         }
         if not config.mgType:
             logger.info("未设置图片类型，使用默认类型")
-            return 
-        else:
-            if config.mgType == "sd1.5/XL模式(可自定义模型)" or config.mgType == "flux模式(仅可自定义lora模型)":
-                logger.info("当前生图类型为{imgType},使用sd1.5/xl模式")
+            return {"code": 1, "msg": "未设置图片类型"}
+        if config.mgType == "sd1.5/XL模式(可自定义模型)":
+            logger.info("当前生图类型为"+str(config.mgType))
+            base_json = model[config.mgType]
+            if not config.isSdLora:
+                logger.info("未开启lora模型，使用默认模型,移除lora")
+                del base_json["generateParams"]["additionalNetwork"]
+            return self.run(base_json, self.text2img_url)
+        elif config.mgType == "flux模式":
+            logger.info("当前生图类型为"+str(config.mgType))
+            try:
                 base_json = model[config.mgType]
-                return self.run(base_json, self.text2img_url)
-            elif self.imgType == "confyui模式":
-                logger.info("当前生图类型为{imgType},使用confyui模式")
-                base_json = model[config.mgType]
-                return self.run(base_json, self.confyui_url)
-            else:
-                logger.info("图片类型错误，或者数值超出大小")
+            except Exception as e:
+                logger.erro(f"调用文生图接口失败，原因：{e}")
                 return
+
+            if not config.isFluxLora:
+                logger.info("未开启lora模型，使用默认模型,移除lora")
+                try:
+                    del base_json["generateParams"]["additionalNetwork"]
+                except Exception as e:
+                    logger.erro(f"lora字段删除错误：{e}")
+                    return
+            
+            try:
+                return self.run(base_json, self.text2img_url)
+            except Exception as e:
+                logger.erro(f"调用文生图请求失败，原因：{e}")
+                return
+
+        elif config.mgType == "confyui模式":
+            logger.info("当前生图类型为"+str(config.mgType))
+            base_json = model[config.mgType]
+            return self.run(base_json, self.confyui_url)
+        else:
+            logger.info("图片类型错误，或者数值超出大小")
+            return {"code": 2, "msg": "设置图片类型错误"}
 
     def run(self, data, url, timeout=120):
         """
@@ -270,40 +300,54 @@ class MyPlugin(Star):
             return f'任务失败,原因：code {progress["msg"]}'
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
-    
+    @filter.command("test")
+    async def test(self, event: AstrMessageEvent):
+        yield event.plain_result(f"打印测试项：{event.message_obj.message}")
+        yield event.plain_result(f"打印测试项：{event.message_obj.raw_message}")
+        yield event.plain_result(f"开始生成图片，当前类型为："+self.imgType)
+        logger.info(event.message_obj.raw_message)
+        logger.info(event.message_obj.message)
     @filter.command("lib")
     async def lib(self, event: AstrMessageEvent):
         #user_name = event.get_sender_name()# 发送消息的用户昵称
+        yield event.plain_result(f"开始生成图片，当前类型为："+self.imgType)
         message_str = event.message_str # 用户发的纯文本消息字符串
-        logger.info(f"获取用户文本：{str(message_str)}")
-        logger.info(f"文生图开始，生图类型为{str(self.imgType)}")
+        yield event.plain_result(f"获取用户原始数据")
         parts = message_str.split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
-        logger.info(f"获取用户提示词：{prompt}")
+        yield event.plain_result(f"提取提示词"+prompt)
         textImgageConfig = text2imgConfig(
             width = self.width,
             height = self.height,
             steps = self.steps,
-            mgType = self.imgType,
+            mgType = str(self.imgType),
             modelId = self.modelId,
             sd_loraModelId = self.sd_loraModelId,
             sd_loraWeight = self.sd_loraWeight,
             flux_loraModelId = self.flux_loraModelId,
             flux_loraWeight = self.flux_loraWeight,
-            message_str = prompt
+            message_str = prompt,
+            isS = self.isSdLora,
+            isF = self.isFluxLora
         )# 构造请求数据
-        Progess = self.text2img(textImgageConfig)# 调用文生图接口
-        logger.info(f"文生图结束，返回结果：{str(Progess)}")
-        pointsCost = Progess.get("data",{}).get("pointsCost",None)# 获取消耗点数
-        accountBalance = Progess.get("data",{}).get("accountBalance",None)# 获取账户余额
-        img_url = Progess.get("data",{}).get("images",[{}])[0].get("imageUrl",None)# 获取图片链接
-        logger.info(f"获取图片链接：{img_url}")
+        yield event.plain_result(f"配置实例初始化完成")
+        
+        try:
+            Progess = self.text2img(textImgageConfig)# 发送请求
+        except Exception as e:
+            yield event.plain_result(f"调用文生图接口失败，原因：{e}")
+            return
+        yield event.plain_result(f"调用文生图接口") 
+        yield event.plain_result("回调参数"+str(Progess))
+        logger.info(str(Progess))# 打印进度
         code = Progess.get("code",None)# 获取状态码
         msg = Progess.get("msg",None)#获取错误信息
         if code == 0:
+            pointsCost = Progess.get("data",{}).get("pointsCost",None)# 获取消耗点数
+            accountBalance = Progess.get("data",{}).get("accountBalance",None)# 获取账户余额
+            img_url = Progess.get("data",{}).get("images",[{}])[0].get("imageUrl",None)# 获取图片链接
             chain = [
                 Comp.At(qq=event.get_sender_id()), # At 消息发送者
-                Comp.Plain(f"打印测试参数{self.text}"), # 发送文本消息
                 Comp.Plain(f"图片已经生成，消耗点数：{pointsCost}，账户余额：{accountBalance}"), # 发送文本消息
                 Comp.Image.fromURL(img_url) # 从 URL 发送图片
             ]
