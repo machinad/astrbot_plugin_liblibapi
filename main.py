@@ -10,7 +10,7 @@ import requests
 from datetime import datetime
 import hashlib
 import uuid
-@register("liblibApi", "machinad", "一个调取liblib在线工作流进行ai绘图的插件", "1.0.2")
+@register("liblibApi", "machinad", "一个调取liblib在线工作流进行ai绘图的插件", "1.0.3")
 class MyPlugin(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
@@ -18,8 +18,12 @@ class MyPlugin(Star):
         self.width= config.get("width")#获取宽度
         self.height = config.get("height")#获取高度
         self.steps = int(config.get("num_inference_steps"))#获取步数
-        self.imgType = config.get("imgType")#获取图片类型
+        self.imgType = config.get("text_imgType")#获取图片类型
         self.modelId = config.get("modelId")#获取模型id
+        self.sd_loraModelId = config.get("sd_lora_modelid")#获取模型id
+        self.sd_loraWeight = config.get("sd_lora_scale")#获取权重
+        self.flux_loraModelId = config.get("flux_lora_modelid")#获取模型id
+        self.flux_loraWeight = config.get("flux_lora_scale")#获取权重
         self.time_stamp = int(datetime.now().timestamp() * 1000)#获取当前时间戳
         self.signature_nonce = uuid.uuid1()#获取uuid
         self.signature_img = self._hash_sk(self.sk, self.time_stamp, self.signature_nonce)#获取签名
@@ -75,102 +79,78 @@ class MyPlugin(Star):
 
         url = f"https://openapi.liblibai.cloud/api/generate/webui/status?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
         return url
-    def text2img(self, modelId,message_str, width, height,steps):
-        ""
-        """
-        文生图全示例 json
-        """
-        base_json1 = {
-            "templateUuid": "e10adc3949ba59abbe56e057f20f883e",
-            "generateParams": {
-                "checkPointId": "0ea388c7eb854be3ba3c6f65aac6bfd3",
-                "vaeId": "",
-                "prompt": message_str,
-                "negativePrompt": "bad-artist, bad-artist-anime, bad-hands-5, bad-image-v2-39000, bad-picture-chill-75v, bad_prompt, bad_prompt_version2, badhandv4, NG_DeepNegative_V1_75T, EasyNegative,2girls, 3girls,,bad quality, poor quality, doll, disfigured, jpg, toy, bad anatomy, missing limbs, missing fingers, 3d, cgi",
-                "width": width,
-                "height": height,
-                "imgCount": 1,
-                "cfgScale": 7,
-                "randnSource": 0,
-                "seed": -1,
-                "clipSkip": 2,
-                "sampler": 15,
-                "steps": steps,
-                "restoreFaces": 0,
-                "additionalNetwork": [
-                    {
-                        "modelId": "3dc63c4fe3df4147ac8a875db3621e9f",
-                        "weight": 0.6
-                    }
-                ],
-                "hiResFixInfo": {
-                    "hiresDenoisingStrength": 0.45,
-                    "hiresSteps": 28,
-                    "resizedHeight": height*2,
-                    "resizedWidth": width*2,
-                    "upscaler": 10
-                },
-            }
-        }
+    class text2imgConfig:
+        def __init__(self,width,height,steps,mgType,modelId,sd_loraModelId,sd_loraWeight,flux_loraModelId,flux_loraWeight,message_str):
+            self.width = width
+            self.height = height
+            self.steps = steps
+            self.mgType = mgType
+            self.modelId = modelId
+            self.sd_loraModelId = sd_loraModelId
+            self.sd_loraWeight = sd_loraWeight
+            self.flux_loraModelId = flux_loraModelId
+            self.flux_loraWeight = flux_loraWeight
+            self.message_str = message_str
+    def text2img(self, config : text2imgConfig):
         model = {
-            "0":{
+            "sd1.5/XL模式(可自定义模型)":{
                 "templateUuid": "e10adc3949ba59abbe56e057f20f883e",
                 "generateParams":{
-                    "checkPointId": modelId,
+                    "checkPointId": config.modelId,
                     "vaeId": "",
-                    "prompt":message_str,
+                    "prompt":config.message_str,
                     "negativePrompt": "bad-artist, bad-artist-anime, bad-hands-5, bad-image-v2-39000, bad-picture-chill-75v, bad_prompt, bad_prompt_version2, badhandv4, NG_DeepNegative_V1_75T, EasyNegative,2girls, 3girls,,bad quality, poor quality, doll, disfigured, jpg, toy, bad anatomy, missing limbs, missing fingers, 3d, cgi",
                     "clipSkip": 2,
                     "sampler": 15,
-                    "steps": steps,
+                    "steps": config.steps,
                     "cfgScale": 7,
-                    "width": width,
-                    "height": height,
+                    "width": config.width,
+                    "height": config.height,
                     "imgCount": 1,
                     "randnSource": 0,
                     "seed": -1,
                     "restoreFaces": 0,
                     "additionalNetwork":[
                         {
-                            "modelId": "31360f2f031b4ff6b589412a52713fcf",
-                            "weight": 0.6
+                            "modelId": config.sd_loraModelId,
+                            "weight": config.sd_loraWeight
                         }
                     ],
                     "hiResFixInfo":{
                         "hiresSteps": 28,
                         "hiresDenoisingStrength": 0.45,
                         "upscaler": 10,
-                        "resizedWidth": width*2,
-                        "resizedHeight": height*2
+                        "resizedWidth": config.width*2,
+                        "resizedHeight": config.height*2
                     }
                 }
             },
-            "1":{
+            "flux模式(仅可自定义lora模型)":{
                 "templateUuid": "6f7c4652458d4802969f8d089cf5b91f",
                 "generateParams":{
-                    "prompt": message_str,
-                    "steps": steps,
-                    "width": width,
-                    "height": height,
+                    "prompt": config.message_str,
+                    "steps": config.steps,
+                    "width": config.width,
+                    "height": config.height,
                     "imgCount": 1,
                     "seed": -1,
                     "restoreFaces": 0,
                     "additionalNetwork":[
                         {
-                            "modelId": "169505112cee468b95d5e4a5db0e5669",
-                            "weight": 1.0
+                            "modelId": config.flux_loraModelId,
+                            "weight": config.flux_loraWeight
                         }
                     ]
                 }
             },
-            "2":{
+            "confyui模式":{
                 "templateUuid": "4df2efa0f18d46dc9758803e478eb51c",
                 "generateParams": {
                 "5": {
                     "class_type": "EmptyLatentImage",
                     "inputs": {
-                        "width": width,
-                        "height": height,
+                        "width": config.width,
+                        "height": config.height,
                         "batch_size": 1
                     }
                 },
@@ -204,7 +184,7 @@ class MyPlugin(Star):
                     "class_type": "CLIPTextEncodeFlux",
                     "inputs": {
                         "clip_l": "",
-                    "t5xxl": message_str,
+                    "t5xxl": config.message_str,
                     "guidance": 3.5
                     }
                 
@@ -241,31 +221,28 @@ class MyPlugin(Star):
                 }
             }
         }
-        if not self.imgType:
+        if not config.mgType:
             logger.info("未设置图片类型，使用默认类型")
             return 
         else:
-            if self.imgType == 0 or self.imgType == 1:
+            if config.mgType == "sd1.5/XL模式(可自定义模型)" or config.mgType == "flux模式(仅可自定义lora模型)":
                 logger.info("当前生图类型为{imgType},使用sd1.5/xl模式")
-                base_json = model[str(self.imgType)]
+                base_json = model[config.mgType]
                 return self.run(base_json, self.text2img_url)
-            elif self.imgType == 2:
+            elif self.imgType == "confyui模式":
                 logger.info("当前生图类型为{imgType},使用confyui模式")
-                base_json = model[str(self.imgType)]
+                base_json = model[config.mgType]
                 return self.run(base_json, self.confyui_url)
             else:
                 logger.info("图片类型错误，或者数值超出大小")
                 return
-        base_json = model[str(self.imgType)]
-        return self.run(base_json, self.text2img_url)
+
     def run(self, data, url, timeout=120):
         """
         发送任务到生图接口，直到返回image为止，失败抛出异常信息
         """
         start_time = time.time()  # 记录开始时间
         # 这里提交任务，校验是否提交成功，并且获取任务ID
-        print(url)
-        logger.info(url)
         response = requests.post(url=url, headers=self.headers, json=data)# 发送请求
         response.raise_for_status()# 检查响应是否成功
         progress = response.json()# 获取响应数据
@@ -298,13 +275,25 @@ class MyPlugin(Star):
     async def lib(self, event: AstrMessageEvent):
         #user_name = event.get_sender_name()# 发送消息的用户昵称
         message_str = event.message_str # 用户发的纯文本消息字符串
-        logger.info(f"获取用户文本：{message_str}")
-        logger.info(f"文生图开始，生图类型为{self.imgType}")
+        logger.info(f"获取用户文本：{str(message_str)}")
+        logger.info(f"文生图开始，生图类型为{str(self.imgType)}")
         parts = message_str.split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
         logger.info(f"获取用户提示词：{prompt}")
-        Progess = self.text2img(prompt,self.width,self.height,self.steps)# 调用文生图接口
-        logger.info(f"文生图结束，返回结果：{Progess}")
+        textImgageConfig = text2imgConfig(
+            width = self.width,
+            height = self.height,
+            steps = self.steps,
+            mgType = self.imgType,
+            modelId = self.modelId,
+            sd_loraModelId = self.sd_loraModelId,
+            sd_loraWeight = self.sd_loraWeight,
+            flux_loraModelId = self.flux_loraModelId,
+            flux_loraWeight = self.flux_loraWeight,
+            message_str = prompt
+        )# 构造请求数据
+        Progess = self.text2img(textImgageConfig)# 调用文生图接口
+        logger.info(f"文生图结束，返回结果：{str(Progess)}")
         pointsCost = Progess.get("data",{}).get("pointsCost",None)# 获取消耗点数
         accountBalance = Progess.get("data",{}).get("accountBalance",None)# 获取账户余额
         img_url = Progess.get("data",{}).get("images",[{}])[0].get("imageUrl",None)# 获取图片链接
@@ -314,6 +303,7 @@ class MyPlugin(Star):
         if code == 0:
             chain = [
                 Comp.At(qq=event.get_sender_id()), # At 消息发送者
+                Comp.Plain(f"打印测试参数{self.text}"), # 发送文本消息
                 Comp.Plain(f"图片已经生成，消耗点数：{pointsCost}，账户余额：{accountBalance}"), # 发送文本消息
                 Comp.Image.fromURL(img_url) # 从 URL 发送图片
             ]

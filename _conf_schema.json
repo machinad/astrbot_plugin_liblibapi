@@ -33,19 +33,42 @@
     "num_inference_steps": {
         "description": "推理步数",
         "type": "int",
-        "default": 20,
+        "default": 28,
         "hint": "生成图片时的推理步数，数值越大生成质量越高但速度越慢"
     },
-    "seed": {
-        "description": "种子ID",
+    "sd_lora_modelid":{
+        "description": "sd1.5/xl模型lora模型ID",
         "type": "string",
-        "default": "随机",
-        "hint": "用于控制生成结果的随机性，输入'随机'则自动生成随机种子"
+        "default": "31360f2f031b4ff6b589412a52713fcf",
+        "hint": "lora模型ID,模式1专用，仅模式1生效"
     },
-    "imgType": {
-        "description": "生成图片的模式，",
-        "type": "int",
-        "default": 0,
-        "hint": "0=1.5/XL模式(可自定义模型)，1=flux模式，2=confyui模式"
+    "sd_lora_scale":{
+        "description": "sd1.5/xl模型lora模型权重",
+        "type": "float",
+        "default": 0.9,
+        "hint": "lora权重，仅模式1生效"
+    },
+    "flux_lora_modelid":{
+        "description": "flux模型lora模型ID",
+        "type": "string",
+        "default": "31360f2f031b4ff6b589412a52713fcf",
+        "hint": "lora模型ID,模式2专用，仅模式2生效"
+    },
+    "flux_lora_scale":{
+        "description": "flux模型lora模型权重",
+        "type": "float",
+        "default": 0.9,
+        "hint": "lora权重，仅模式2生效"
+    },
+    "text_imgType":{
+        "description": "生成图片的模式",
+        "type": "string",
+        "default": ["sd1.5/XL模式(可自定义模型)"],
+        "options": [
+            "sd1.5/XL模式(可自定义模型)",
+            "flux模式(仅可自定义lora模型)",
+            "confyui模式"
+        ],
+        "hint": "生成图片的模式"
     }
 }
