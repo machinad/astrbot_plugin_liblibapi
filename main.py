@@ -1,3 +1,4 @@
+from cmd import PROMPT
 from curses import nonl
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
@@ -11,7 +12,7 @@ from datetime import datetime
 import hashlib
 import uuid
 class text2imgConfig:
-    def __init__(self,width,height,steps,mgType,modelId,sd_loraModelId,sd_loraWeight,flux_loraModelId,flux_loraWeight,message_str,isS,isF):
+    def __init__(self,width=512,height=512,steps=28,mgType=None,modelId=None,sd_loraModelId=None,sd_loraWeight=1,flux_loraModelId=None,flux_loraWeight=1,message_str=None,isS=False,isF=False):
         self.width = width
         self.height = height
         self.steps = steps
@@ -97,14 +98,15 @@ class MyPlugin(Star):
         url = f"https://openapi.liblibai.cloud/api/generate/webui/status?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
         return url
 
-    def text2img(self, config: text2imgConfig):
+    async def text2img(self, config: text2imgConfig):
+        uPrompt = config.message_str
         model = {
             "sd1.5/XL模式(可自定义模型)":{
                 "templateUuid": "e10adc3949ba59abbe56e057f20f883e",
                 "generateParams":{
                     "checkPointId": config.modelId,
                     "vaeId": "",
-                    "prompt":config.message_str,
+                    "prompt":uPrompt,
                     "negativePrompt": "bad-artist, bad-artist-anime, bad-hands-5, bad-image-v2-39000, bad-picture-chill-75v, bad_prompt, bad_prompt_version2, badhandv4, NG_DeepNegative_V1_75T, EasyNegative,2girls, 3girls,,bad quality, poor quality, doll, disfigured, jpg, toy, bad anatomy, missing limbs, missing fingers, 3d, cgi",
                     "clipSkip": 2,
                     "sampler": 15,
@@ -134,7 +136,7 @@ class MyPlugin(Star):
             "flux模式":{
                 "templateUuid": "6f7c4652458d4802969f8d089cf5b91f",
                 "generateParams":{
-                    "prompt": config.message_str,
+                    "prompt": uPrompt,
                     "steps": config.steps,
                     "width": config.width,
                     "height": config.height,
@@ -190,7 +192,7 @@ class MyPlugin(Star):
                     "class_type": "CLIPTextEncodeFlux",
                     "inputs": {
                         "clip_l": "",
-                    "t5xxl": config.message_str,
+                    "t5xxl": uPrompt,
                     "guidance": 3.5
                     }
                 
@@ -227,14 +229,27 @@ class MyPlugin(Star):
                 }
             }
         }
+        if self.has_chinese(config.message_str):
+            logger.info("检测到中文，开始翻译提示词")
+            llm_pormpt = text2imgConfig(
+                message_str = config.message_str,
+            )
+            sysPormpt = """
+                stableDiffusion是一款利用深度学习的文生图模型，支持通过使用提示词来产生新的图像，描述要包含或省略的元素。我在这里引入StableDiffusion算法中的Prompt概念，又被称为提示符。
+下面的prompt是用来指导AI绘画模型创作图像的。它们包含了图像的各种细节，如人物的外观、背景、颜色和光线效果，以及图像的主题和风格。这些prompt的格式经常包含括号内的加权数字，用于指定某些细节的重要性或强调。例如，"(masterpiece:1.5)"表示作品质量是非常重要的，多个括号也有类似作用。此外，如果使用中括号，如"{blue hair:white hair:0.3}"，这代表将蓝发和白发加以融合，蓝发占比为0.3。
+以下是用prompt帮助AI模型生成图像的例子:(bestquality),highlydetailed,ultra-detailed,cold,solo,(1girl),(detailedeyes),(shinegoldeneyes),(longliverhair),expressionless,(long sleeves),(puffy sleeves),(white wings),shinehalo,(heavymetal:1.2),(metaljewelry),cross-lacedfootwear (chain),(Whitedoves:1.2)
+对于结果，请直接输出提示词
+                """
+            uPrompt = await self.LLMmessage(llm_pormpt,sysPormpt)
+            logger.info("翻译完成，翻译结果为："+str(uPrompt))
         if not config.mgType:
-            logger.info("未设置图片类型，使用默认类型")
-            return {"code": 1, "msg": "未设置图片类型"}
+            logger.info("生图类型为空")
+            return {"code": 1, "msg": "类型为空，未设置类型"}
         if config.mgType == "sd1.5/XL模式(可自定义模型)":
             logger.info("当前生图类型为"+str(config.mgType))
             base_json = model[config.mgType]
             if not config.isSdLora:
-                logger.info("未开启lora模型，使用默认模型,移除lora")
+                logger.info("未开启lora模型，移除lora")
                 del base_json["generateParams"]["additionalNetwork"]
             return self.run(base_json, self.text2img_url)
         elif config.mgType == "flux模式":
@@ -242,22 +257,22 @@ class MyPlugin(Star):
             try:
                 base_json = model[config.mgType]
             except Exception as e:
-                logger.erro(f"调用文生图接口失败，原因：{e}")
-                return
+                logger.erro(f"flux模式调用文生图接口失败，原因：json类型设置错误{e}")
+                return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：json类型设置错误"}
 
             if not config.isFluxLora:
-                logger.info("未开启lora模型，使用默认模型,移除lora")
+                logger.info("未开启lora模型,移除lora")
                 try:
                     del base_json["generateParams"]["additionalNetwork"]
                 except Exception as e:
                     logger.erro(f"lora字段删除错误：{e}")
-                    return
+                    return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：字段删除错误"}
             
             try:
                 return self.run(base_json, self.text2img_url)
             except Exception as e:
-                logger.erro(f"调用文生图请求失败，原因：{e}")
-                return
+                logger.erro(f"flux模式调用文生图请求失败，原因：{e}")
+                return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：请求失败"}
 
         elif config.mgType == "confyui模式":
             logger.info("当前生图类型为"+str(config.mgType))
@@ -266,7 +281,28 @@ class MyPlugin(Star):
         else:
             logger.info("图片类型错误，或者数值超出大小")
             return {"code": 2, "msg": "设置图片类型错误"}
-
+    def has_chinese(self,text):
+        """
+        检查字符串中是否包含中文字符
+        """
+        for char in text:
+            if '\u4e00' <= char <= '\u9fff':
+                return True
+        return False
+    async def LLMmessage(self,event:text2imgConfig,sysPrompt):
+        """
+        调用LLM翻译提示词
+        """
+        Prompt = event.message_str
+        Context = []
+        llm_response = await self.context.get_using_provider().text_chat(
+        prompt=Prompt,
+        session_id=None, # 此已经被废弃
+        contexts=Context, # 也可以用上面获得的用户当前的对话记录 context
+        image_urls=[], # 图片链接，支持路径和网络链接
+        system_prompt=sysPrompt  # 系统提示，可以不传
+    )
+        return llm_response.result_chain.chain[0].text
     def run(self, data, url, timeout=120):
         """
         发送任务到生图接口，直到返回image为止，失败抛出异常信息
@@ -289,12 +325,10 @@ class MyPlugin(Star):
                 response = requests.post(url=self.generate_url, headers=self.headers, json=data)# 发送请求
                 response.raise_for_status()# 检查响应是否成功
                 progress = response.json()# 获取响应数据
-                logger.info(progress)# 打印进度
 
                 if progress['data'].get('images') and any(image for image in progress['data']['images'] if image is not None):
                     logger.info(f"任务完成，获取到图像数据。")
                     return progress
-                logger.info(f"任务尚未完成，等待 {self.interval} 秒...")
                 time.sleep(self.interval)
         else:
             return f'任务失败,原因：code {progress["msg"]}'
@@ -302,20 +336,9 @@ class MyPlugin(Star):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
     @filter.command("test")
     async def test(self, event: AstrMessageEvent):
-        yield event.plain_result(f"打印测试项：{event.message_obj.message}")
-        yield event.plain_result(f"打印测试项：{event.message_obj.raw_message}")
-        yield event.plain_result(f"开始生成图片，当前类型为："+self.imgType)
-        logger.info(event.message_obj.raw_message)
-        logger.info(event.message_obj.message)
-    @filter.command("lib")
-    async def lib(self, event: AstrMessageEvent):
-        #user_name = event.get_sender_name()# 发送消息的用户昵称
-        yield event.plain_result(f"开始生成图片，当前类型为："+self.imgType)
-        message_str = event.message_str # 用户发的纯文本消息字符串
-        yield event.plain_result(f"获取用户原始数据")
+        message_str = event.message_str
         parts = message_str.split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
-        yield event.plain_result(f"提取提示词"+prompt)
         textImgageConfig = text2imgConfig(
             width = self.width,
             height = self.height,
@@ -330,16 +353,43 @@ class MyPlugin(Star):
             isS = self.isSdLora,
             isF = self.isFluxLora
         )# 构造请求数据
-        yield event.plain_result(f"配置实例初始化完成")
-        
+        Progess = await self.text2img(textImgageConfig)
+        yield event.plain_result(str(Progess))
+    @filter.command("limg")
+    async def limg(self, event: AstrMessageEvent):
+        """
+        使用文生图，比如/lib 1girl
+        """
+        #user_name = event.get_sender_name()# 发送消息的用户昵称
+        #yield event.plain_result(f"开始生成图片，当前类型为："+self.imgType)
+        message_str = event.message_str # 用户发的纯文本消息字符串
+        #yield event.plain_result(f"获取用户原始数据")
+        parts = message_str.split(" ",1)
+        prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
+        #yield event.plain_result(f"提取提示词"+prompt)
+        textImgageConfig = text2imgConfig(
+            width = self.width,
+            height = self.height,
+            steps = self.steps,
+            mgType = str(self.imgType),
+            modelId = self.modelId,
+            sd_loraModelId = self.sd_loraModelId,
+            sd_loraWeight = self.sd_loraWeight,
+            flux_loraModelId = self.flux_loraModelId,
+            flux_loraWeight = self.flux_loraWeight,
+            message_str = prompt,
+            isS = self.isSdLora,
+            isF = self.isFluxLora
+        )# 构造请求数据
+        #yield event.plain_result(f"配置实例初始化完成")
         try:
-            Progess = self.text2img(textImgageConfig)# 发送请求
+            Progess = await self.text2img(textImgageConfig)# 发送请求
         except Exception as e:
             yield event.plain_result(f"调用文生图接口失败，原因：{e}")
             return
-        yield event.plain_result(f"调用文生图接口") 
-        yield event.plain_result("回调参数"+str(Progess))
-        logger.info(str(Progess))# 打印进度
+        #yield event.plain_result(f"调用文生图接口") 
+        #yield event.plain_result("回调参数"+str(Progess))
+        logger.info(str(Progess))# 返回原始信息
         code = Progess.get("code",None)# 获取状态码
         msg = Progess.get("msg",None)#获取错误信息
         if code == 0:
