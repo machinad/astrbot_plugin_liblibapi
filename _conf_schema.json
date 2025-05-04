@@ -37,7 +37,7 @@
         "hint": "生成图片时的推理步数，数值越大生成质量越高但速度越慢"
     },
     "is_SdLora": {
-        "description": "是否使用lora",
+        "description": "sd模式是否使用lora",
         "type": "bool",
         "default": false,
         "hint": "是否使用sd1.5/XL模式lora模型"
@@ -55,7 +55,7 @@
         "hint": "lora权重，仅sd1.5/XL模式模式生效"
     },
     "is_fluxLora": {
-        "description": "是否使用lora",
+        "description": "flux模式是否使用lora",
         "type": "bool",
         "default": false,
         "hint": "是否使用flux模式lora模型"

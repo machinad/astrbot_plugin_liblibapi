@@ -26,7 +26,7 @@ class text2imgConfig:
         self.isSdLora = isS
         self.isFluxLora = isF
 
-@register("liblibApi", "machinad", "一个调取liblib在线工作流进行ai绘图的插件", "1.0.3")
+@register("liblibApi", "machinad", "一个强大的AI文生图插件，基于LiblibAI的API服务，支持多种绘图模式和自定义模型配置。可自定义大模型和lora模型- 支持中英文提示词（中文会自动翻译为英文提示词）- 灵活的参数配置- 支持自定义工作流", "1.0.4")
 class MyPlugin(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
@@ -334,8 +334,11 @@ class MyPlugin(Star):
             return f'任务失败,原因：code {progress["msg"]}'
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
-    @filter.command("test")
-    async def test(self, event: AstrMessageEvent):
+    @filter.command("ltest")
+    async def ltest(self, event: AstrMessageEvent):
+        """
+        测试保留指令，也可以这这个指令翻译提示词
+        """
         message_str = event.message_str
         parts = message_str.split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
@@ -358,7 +361,7 @@ class MyPlugin(Star):
     @filter.command("limg")
     async def limg(self, event: AstrMessageEvent):
         """
-        使用文生图，比如/lib 1girl
+        使用文生图，比如/limg 1girl或是/limg 一个男孩，穿红色衣服
         """
         #user_name = event.get_sender_name()# 发送消息的用户昵称
         #yield event.plain_result(f"开始生成图片，当前类型为："+self.imgType)
