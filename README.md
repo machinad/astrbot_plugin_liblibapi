@@ -57,6 +57,10 @@
    - API调用仅支持可商用模型
    - 未标记可商用的模型将无法通过API使用
 
+![模型筛选说明](https://github.com/machinad/astrbot_plugin_liblibapi/blob/master/src/10001.png)
+
+_在筛选条件中勾选"生成图片可商用"选项_
+
 ### 模型版本匹配
 
 选择模型时，请严格遵守以下版本对应规则：
