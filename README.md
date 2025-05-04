@@ -138,16 +138,83 @@ https://www.liblib.art/modelDetail?versionUuid=6ab15bc284e0494ab4124d1c1744b56f
 
 2. API配置示例：
 ```json
-{
-  "workflow_api": {
-    "api_id": "your_api_id",
-    "inputs": {
-      "prompt": "用户输入的提示词",
-      "negative_prompt": "要排除的内容",
-      "other_params": "其他自定义参数"
-    }
-  }
-}
+            "confyui模式":{
+                "templateUuid": "4df2efa0f18d46dc9758803e478eb51c",
+                "generateParams": {
+                "5": {
+                    "class_type": "EmptyLatentImage",
+                    "inputs": {
+                        "width": config.width,
+                        "height": config.height,
+                        "batch_size": 1
+                    }
+                },
+                "10": {
+                    "class_type": "UNETLoader",
+                    "inputs": {
+                        "unet_name": "412b427ddb674b4dbab9e5abd5ae6057",
+                        "weight_dtype": "fp8_e4m3fn"
+                    }
+                
+                },
+                "11": {
+                    "class_type": "DualCLIPLoader",
+                    "inputs": {
+                        "clip_name1": "clip_l",
+                        "clip_name2": "t5xxl_fp8_e4m3fn",
+                        "type": "flux",
+                        "device": "default"
+                    }
+                
+                },
+                "13": {
+                    "class_type": "LoraLoader",
+                    "inputs": {
+                        "lora_name": "92b126744e7b49dfb76202b094d406e9",
+                        "strength_model": 0.6,
+                        "strength_clip": 2
+                    }
+                },
+                "15": {
+                    "class_type": "CLIPTextEncodeFlux",
+                    "inputs": {
+                        "clip_l": "",
+                    "t5xxl": uPrompt,
+                    "guidance": 3.5
+                    }
+                
+                 },
+                "16": {
+                    "class_type": "VAELoader",
+                    "inputs": {
+                        "vae_name": "ae.sft"
+                    }
+                
+                 },
+                "17": {
+                    "class_type": "FluxSamplerParams+",
+                    "inputs": {
+                        "seed": "49375",
+                        "sampler": "euler",
+                        "scheduler": "simple",
+                        "steps": "15",
+                        "guidance": "3.5",
+                        "max_shift": "",
+                        "base_shift": "",
+                        "denoise": ""
+                    }
+                },
+                "19": {
+                    "class_type": "LoraLoader",
+                    "inputs": {
+                        "lora_name": "60cdd0badb844e039aa3cf0d9908f70e",
+                        "strength_model": 0.6,
+                        "strength_clip": 2
+                    }
+                },
+                "workflowUuid": "f454f4a44bc440ca9427ca48c931598e"
+                }
+            }
 ```
 
 ### 使用建议
