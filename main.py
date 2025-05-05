@@ -1,5 +1,6 @@
 from cmd import PROMPT
 from curses import nonl
+import re
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
@@ -231,6 +232,7 @@ class MyPlugin(Star):
         }
         if self.has_chinese(config.message_str):
             logger.info("检测到中文，开始翻译提示词")
+            textA = self.exextract_letters(config.message_str)
             llm_pormpt = text2imgConfig(
                 message_str = config.message_str,
             )
@@ -240,7 +242,8 @@ class MyPlugin(Star):
 以下是用prompt帮助AI模型生成图像的例子:(bestquality),highlydetailed,ultra-detailed,cold,solo,(1girl),(detailedeyes),(shinegoldeneyes),(longliverhair),expressionless,(long sleeves),(puffy sleeves),(white wings),shinehalo,(heavymetal:1.2),(metaljewelry),cross-lacedfootwear (chain),(Whitedoves:1.2)
 对于结果，请直接输出提示词
                 """
-            uPrompt = await self.LLMmessage(llm_pormpt,sysPormpt)
+            textB = await self.LLMmessage(llm_pormpt,sysPormpt)
+            uPrompt = textA + textB
             logger.info("翻译完成，翻译结果为："+str(uPrompt))
         if not config.mgType:
             logger.info("生图类型为空")
@@ -281,6 +284,9 @@ class MyPlugin(Star):
         else:
             logger.info("图片类型错误，或者数值超出大小")
             return {"code": 2, "msg": "设置图片类型错误"}
+    def exextract_letters(self,text):
+        latters = re.findall(r'[a-zA-Z]', text)
+        return " ".join(latters)
     def has_chinese(self,text):
         """
         检查字符串中是否包含中文字符
