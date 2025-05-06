@@ -19,34 +19,124 @@
 
 ## 配置说明
 
-### 基础配置
+### 配置参数详解
 
-必填项：
+#### 基础配置
+
+##### 必填参数
 - `AccessKey`：从LiblibAI获取的访问密钥
-- `SecretKey`：从LiblibAI获取的密钥
+  - 用途：用于API身份验证
+  - 获取方式：访问 https://www.liblib.art/apis 注册并获取
+  - 默认值：AccessKey
 
-可选配置：
-- `width`：生成图片宽度（默认1024）
-- `height`：生成图片高度（默认1024）
-- `num_inference_steps`：推理步数，数值越大生成质量越高但速度越慢（默认28）
+- `SecretKey`：从LiblibAI获取的密钥
+  - 用途：用于API身份验证
+  - 获取方式：与AccessKey一同获取
+  - 默认值：SecretKey
+
+##### 图像生成参数
+- `text_imgType`：生成图片的模式
+  - 可选值：
+    - sd1.5/XL模式(可自定义模型)
+    - flux模式
+    - confyui模式
+  - 默认值：sd1.5/XL模式(可自定义模型)
+
+- `width`：生成图片宽度
+  - 用途：控制输出图片的宽度分辨率
+  - 默认值：1024
+  - 建议：根据需求调整，但要注意较大的分辨率会增加生成时间
+
+- `height`：生成图片高度
+  - 用途：控制输出图片的高度分辨率
+  - 默认值：1024
+  - 建议：根据需求调整，但要注意较大的分辨率会增加生成时间
+
+- `num_inference_steps`：推理步数
+  - 用途：控制图像生成的精细程度
+  - 默认值：28
+  - 说明：数值越大生成质量越高，但速度越慢
+
+- `seed`：随机种子
+  - 用途：控制图像生成的随机性
+  - 默认值：-1（随机种子）
+  - 说明：固定seed可以生成相同的图像
+
+##### 提示词翻译配置
+- `prompt_Translation`：提示词翻译设置
+  - `is_Translation`：是否启用翻译
+    - 类型：布尔值
+    - 默认值：false
+  - `Translation_Type`：翻译类型
+    - 可选值：
+      - sd格式提示词：转换为SD模型优化的提示词格式
+      - 英语直译(自然语言)：直接翻译为自然英语
+      - 中译中(ai润色)：优化中文描述
 
 ### 绘图模式配置
 
-在`text_imgType`中选择以下模式之一：
+根据选择的`text_imgType`，需要配置对应模式的参数：
 
-1. **sd1.5/XL模式**
-   - `modelId`：大模型ID
-   - `is_SdLora`：是否使用lora模型（true/false）
-   - `sd_lora_modelid`：lora模型ID
-   - `sd_lora_scale`：lora权重（默认0.9）
+#### 1. SD1.5/XL模式配置
+- `sd1.5/xl_config`：SD1.5/XL模式的专用配置
+  - `is_SdLora`：是否使用lora模型
+    - 类型：布尔值
+    - 默认值：false
+    - 说明：启用后会应用LoRA模型增强效果
+  
+  - `modelId`：大模型ID
+    - 类型：字符串
+    - 默认值：0ea388c7eb854be3ba3c6f65aac6bfd3
+    - 获取方式：从模型详情页URL中的versionUuid参数获取
+    - 说明：必须选择与模式版本匹配的模型（SD1.5或SDXL）
+  
+  - `sd_lora_modelid`：LoRA模型ID
+    - 类型：字符串
+    - 默认值：31360f2f031b4ff6b589412a52713fcf
+    - 说明：仅在启用LoRA时生效，必须与大模型版本匹配
+  
+  - `sd_lora_scale`：LoRA权重
+    - 类型：浮点数
+    - 默认值：0.9
+    - 说明：控制LoRA效果的强度，范围通常在0-1之间
 
-2. **flux模式**
-   - `is_fluxLora`：是否使用lora模型（true/false）
-   - `flux_lora_modelid`：lora模型ID
-   - `flux_lora_scale`：lora权重（默认0.9）
+#### 2. Flux模式配置
+- `flux_config`：Flux模式的专用配置
+  - `is_fluxLora`：是否使用lora模型
+    - 类型：布尔值
+    - 默认值：false
+    - 说明：启用后会应用Flux专用的LoRA模型
+  
+  - `flux_lora_modelid`：Flux LoRA模型ID
+    - 类型：字符串
+    - 默认值：169505112cee468b95d5e4a5db0e5669
+    - 说明：仅支持Flux版本的LoRA模型
+  
+  - `flux_lora_scale`：LoRA权重
+    - 类型：浮点数
+    - 默认值：0.9
+    - 说明：控制Flux LoRA效果的强度
 
-3. **confyui模式**（适合高级用户）
-   - 需要自定义工作流配置
+#### 3. ComfyUI模式配置
+- `confyui_overwriting`：ComfyUI的API配置
+  - 类型：文本（JSON格式）
+  - 用途：自定义API调用配置
+  - 支持的占位符：
+    - {{prompt}}：提示词
+    - {{height}}：高度
+    - {{width}}：宽度
+    - {{seed}}：随机种子
+    - {{steps}}：推理步数
+  - 示例：
+    ```json
+    {
+      "prompt": "{{prompt}}",
+      "height": {{height}},
+      "width": {{width}},
+      "seed": {{seed}},
+      "steps": {{steps}}
+    }
+    ```
 
 ## 模型获取说明
 
