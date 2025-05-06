@@ -88,6 +88,10 @@ https://www.liblib.art/modelDetail?versionUuid=6ab15bc284e0494ab4124d1c1744b56f
 ```
 这里的 `6ab15bc284e0494ab4124d1c1744b56f` 就是模型ID
 
+![模型ID获取说明](https://github.com/machinad/astrbot_plugin_liblibapi/blob/master/src/10002.png)
+
+_在模型详情页面的地址栏中找到并复制模型ID_
+
 ## 使用方法
 
 ### 基础绘图命令

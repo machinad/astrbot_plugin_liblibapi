@@ -8,15 +8,17 @@ import astrbot.api.message_components as Comp
 import hmac
 import base64
 import time
+import json
 import requests
 from datetime import datetime
 import hashlib
 import uuid
 class text2imgConfig:
-    def __init__(self,width=512,height=512,steps=28,mgType=None,modelId=None,sd_loraModelId=None,sd_loraWeight=1,flux_loraModelId=None,flux_loraWeight=1,message_str=None,isS=False,isF=False):
+    def __init__(self,width=512,height=512,steps=28,seed=-1,mgType=None,modelId=None,sd_loraModelId=None,sd_loraWeight=1,flux_loraModelId=None,flux_loraWeight=1,message_str=None,isS=False,isF=False,confyui_api=None,istranslate=True,translateType=None):
         self.width = width
         self.height = height
         self.steps = steps
+        self.seed = seed
         self.mgType = mgType
         self.modelId = modelId
         self.sd_loraModelId = sd_loraModelId
@@ -26,8 +28,11 @@ class text2imgConfig:
         self.message_str = message_str
         self.isSdLora = isS
         self.isFluxLora = isF
+        self.confyui_api = confyui_api
+        self.istranslate = istranslate
+        self.translateType = translateType
 
-@register("liblibApi", "machinad", "一个强大的AI文生图插件，基于LiblibAI的API服务，支持多种绘图模式和自定义模型配置。可自定义大模型和lora模型- 支持中英文提示词（中文会自动翻译为英文提示词）- 灵活的参数配置- 支持自定义工作流", "1.0.4")
+@register("liblibApi", "machinad", "一个强大的AI文生图插件，基于LiblibAI的API服务，支持多种绘图模式和自定义模型配置。可自定义大模型和lora模型- 支持中英文提示词（中文会自动翻译为英文提示词）- 灵活的参数配置- 支持自定义工作流", "1.0.5")
 class MyPlugin(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
@@ -35,14 +40,18 @@ class MyPlugin(Star):
         self.width= config.get("width")#获取宽度
         self.height = config.get("height")#获取高度
         self.steps = int(config.get("num_inference_steps"))#获取步数
+        self.seed = config.get("seed")#获取种子
         self.imgType = config.get("text_imgType")#获取图片类型
-        self.modelId = config.get("modelId")#获取模型id
-        self.sd_loraModelId = config.get("sd_lora_modelid")#获取模型id
-        self.sd_loraWeight = config.get("sd_lora_scale")#获取权重
-        self.flux_loraModelId = config.get("flux_lora_modelid")#获取模型id
-        self.flux_loraWeight = config.get("flux_lora_scale")#获取权重
-        self.isSdLora = config.get("is_SdLora")#获取是否使用lora
-        self.isFluxLora = config.get("is_fluxLora")#获取是否使用lora
+        self.modelId = config.get("sd1.5/xl_config").get("modelId")#获取模型id
+        self.sd_loraModelId = config.get("sd1.5/xl_config").get("sd_lora_modelid")#获取模型id
+        self.sd_loraWeight = config.get("sd1.5/xl_config").get("sd_lora_scale")#获取权重
+        self.flux_loraModelId = config.get("flux_config").get("flux_lora_modelid")#获取模型id
+        self.flux_loraWeight = config.get("flux_config").get("flux_lora_scale")#获取权重
+        self.isSdLora = config.get("sd1.5/xl_config").get("is_SdLora")#获取是否使用lora
+        self.isFluxLora = config.get("flux_config").get("is_fluxLora")#获取是否使用lora
+        self.confyui_api = config.get("confyui_overwriting")#获取confyui api
+        self.istranslate = config.get("prompt_Translation").get("is_Translation")#获取是否翻译
+        self.translateType = config.get("prompt_Translation").get("Translation_Type")#获取翻译类型
         self.time_stamp = int(datetime.now().timestamp() * 1000)#获取当前时间戳
         self.signature_nonce = uuid.uuid1()#获取uuid
         self.signature_img = self._hash_sk(self.sk, self.time_stamp, self.signature_nonce)#获取签名
@@ -117,7 +126,7 @@ class MyPlugin(Star):
                     "height": config.height,
                     "imgCount": 1,
                     "randnSource": 0,
-                    "seed": -1,
+                    "seed": config.seed,
                     "restoreFaces": 0,
                     "additionalNetwork":[
                         {
@@ -142,7 +151,7 @@ class MyPlugin(Star):
                     "width": config.width,
                     "height": config.height,
                     "imgCount": 1,
-                    "seed": -1,
+                    "seed": config.seed,
                     "restoreFaces": 0,
                     "additionalNetwork":[
                         {
@@ -230,20 +239,31 @@ class MyPlugin(Star):
                 }
             }
         }
-        if self.has_chinese(config.message_str):
+        if self.has_chinese(config.message_str) and config.istranslate:
             logger.info("检测到中文，开始翻译提示词")
-            textA = self.exextract_letters(config.message_str)
-            llm_pormpt = text2imgConfig(
-                message_str = config.message_str,
-            )
-            sysPormpt = """
+            if config.translateType == "sd格式提示词":
+                sysPormpt = """
                 stableDiffusion是一款利用深度学习的文生图模型，支持通过使用提示词来产生新的图像，描述要包含或省略的元素。我在这里引入StableDiffusion算法中的Prompt概念，又被称为提示符。
 下面的prompt是用来指导AI绘画模型创作图像的。它们包含了图像的各种细节，如人物的外观、背景、颜色和光线效果，以及图像的主题和风格。这些prompt的格式经常包含括号内的加权数字，用于指定某些细节的重要性或强调。例如，"(masterpiece:1.5)"表示作品质量是非常重要的，多个括号也有类似作用。此外，如果使用中括号，如"{blue hair:white hair:0.3}"，这代表将蓝发和白发加以融合，蓝发占比为0.3。
 以下是用prompt帮助AI模型生成图像的例子:(bestquality),highlydetailed,ultra-detailed,cold,solo,(1girl),(detailedeyes),(shinegoldeneyes),(longliverhair),expressionless,(long sleeves),(puffy sleeves),(white wings),shinehalo,(heavymetal:1.2),(metaljewelry),cross-lacedfootwear (chain),(Whitedoves:1.2)
 对于结果，请直接输出提示词
                 """
-            textB = await self.LLMmessage(llm_pormpt,sysPormpt)
-            uPrompt = textA + textB
+                logger.info("使用sd格式提示词")
+            elif config.translateType == "英语直译(自然语言)":
+                sysPormpt = """
+                你是一个好用的翻译助手。请将我的中文翻译成英文，将所有非中文的翻译成中文。我发给你所有的话都是需要翻译的内容，你只需要回答翻译结果。翻译结果请符合中文的语言习惯。
+                """
+                logger.info("仅翻译成英语")
+            elif config.translateType == "中译中(ai润色)":
+                sysPormpt = """请对文字润色，润色结果请符合中文的语境习惯。请直接输出润色后的文字"""
+                logger.info("不翻译，仅润色")
+            textA = self.exextract_letters(config.message_str)#提取可能存在的lora提示词
+            llm_pormpt = text2imgConfig(
+                message_str = config.message_str,
+            )#获取一个新的用户消息实例
+            
+            textB = await self.LLMmessage(llm_pormpt,sysPormpt)#获取翻译结果
+            uPrompt = textA + textB#拼接翻译结果
             logger.info("翻译完成，翻译结果为："+str(uPrompt))
         if not config.mgType:
             logger.info("生图类型为空")
@@ -268,18 +288,32 @@ class MyPlugin(Star):
                 try:
                     del base_json["generateParams"]["additionalNetwork"]
                 except Exception as e:
-                    logger.erro(f"lora字段删除错误：{e}")
+                    logger.info(f"lora字段删除错误：{e}")
                     return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：字段删除错误"}
             
             try:
                 return self.run(base_json, self.text2img_url)
             except Exception as e:
-                logger.erro(f"flux模式调用文生图请求失败，原因：{e}")
+                logger.info(f"flux模式调用文生图请求失败，原因：{e}")
                 return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：请求失败"}
 
         elif config.mgType == "confyui模式":
+            if config.confyui_api is not None and config.confyui_api != "":
+                api_str = config.confyui_api.replace("{{prompt}}", uPrompt)
+                api_str = config.confyui_api.replace("{{height}}", config.height)
+                api_str = config.confyui_api.replace("{{width}}", config.width)
+                api_str = config.confyui_api.replace("{{steps}}", config.steps)
+                api_str = config.confyui_api.replace("{{seed}}", config.seed)
+                try:
+                    base_json = json.loads(api_str)
+                except Exception as e:
+                    logger.info(f"confyui模式调用文生图接口失败，原因：json类型设置错误{e}")
+                    logger.info(str(api_str))
+                    return {"code": 1, "msg": "confyui模式调用文生图接口失败，原因：json类型设置错误"}
+                logger.info("载入自定义confyui接口")
+            else:
+                base_json = model[config.mgType]
             logger.info("当前生图类型为"+str(config.mgType))
-            base_json = model[config.mgType]
             return self.run(base_json, self.confyui_url)
         else:
             logger.info("图片类型错误，或者数值超出大小")
@@ -352,6 +386,7 @@ class MyPlugin(Star):
             width = self.width,
             height = self.height,
             steps = self.steps,
+            seed = self.seed,
             mgType = str(self.imgType),
             modelId = self.modelId,
             sd_loraModelId = self.sd_loraModelId,
@@ -360,7 +395,8 @@ class MyPlugin(Star):
             flux_loraWeight = self.flux_loraWeight,
             message_str = prompt,
             isS = self.isSdLora,
-            isF = self.isFluxLora
+            isF = self.isFluxLora,
+            confyui_api = self.confyui_api
         )# 构造请求数据
         Progess = await self.text2img(textImgageConfig)
         yield event.plain_result(str(Progess))
@@ -380,6 +416,7 @@ class MyPlugin(Star):
             width = self.width,
             height = self.height,
             steps = self.steps,
+            seed = self.seed,
             mgType = str(self.imgType),
             modelId = self.modelId,
             sd_loraModelId = self.sd_loraModelId,
@@ -388,7 +425,10 @@ class MyPlugin(Star):
             flux_loraWeight = self.flux_loraWeight,
             message_str = prompt,
             isS = self.isSdLora,
-            isF = self.isFluxLora
+            isF = self.isFluxLora,
+            confyui_api = self.confyui_api,
+            istranslate=self.istranslate,
+            translateType=self.translateType
         )# 构造请求数据
         #yield event.plain_result(f"配置实例初始化完成")
         try:
