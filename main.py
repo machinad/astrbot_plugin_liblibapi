@@ -1,6 +1,7 @@
 from cmd import PROMPT
 from curses import nonl
 import re
+import httpx
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
@@ -32,7 +33,7 @@ class text2imgConfig:
         self.istranslate = istranslate
         self.translateType = translateType
 
-@register("liblibApi", "machinad", "一个功能强大的AI文生图插件，基于LiblibAI的API服务。支持SD1.5/XL、Flux和ComfyUI三种绘图模式，可自由搭配大模型和LoRA模型实现个性化创作。", "1.0.5")
+@register("liblibApi", "machinad", "一个功能强大的AI文生图插件，基于LiblibAI的API服务。支持SD1.5/XL、Flux和ComfyUI三种绘图模式，可自由搭配大模型和LoRA模型实现个性化创作。", "1.0.6")
 class MyPlugin(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
@@ -257,7 +258,7 @@ class MyPlugin(Star):
             elif config.translateType == "中译中(ai润色)":
                 sysPormpt = """请对文字润色，润色结果请符合中文的语境习惯。请直接输出润色后的文字"""
                 logger.info("不翻译，仅润色")
-            textA = self.exextract_letters(config.message_str)#提取可能存在的lora提示词
+            textA = await self.exextract_letters(config.message_str)#提取可能存在的lora提示词
             llm_pormpt = text2imgConfig(
                 message_str = config.message_str,
             )#获取一个新的用户消息实例
@@ -267,14 +268,14 @@ class MyPlugin(Star):
             logger.info("翻译完成，翻译结果为："+str(uPrompt))
         if not config.mgType:
             logger.info("生图类型为空")
-            return {"code": 1, "msg": "类型为空，未设置类型"}
+            return {"code": 1, "msg": "生图模式类型为空，未设置类型"}
         if config.mgType == "sd1.5/XL模式(可自定义模型)":
             logger.info("当前生图类型为"+str(config.mgType))
             base_json = model[config.mgType]
             if not config.isSdLora:
                 logger.info("未开启lora模型，移除lora")
                 del base_json["generateParams"]["additionalNetwork"]
-            return self.run(base_json, self.text2img_url)
+            return await self.run(base_json, self.text2img_url)
         elif config.mgType == "flux模式":
             logger.info("当前生图类型为"+str(config.mgType))
             try:
@@ -292,7 +293,7 @@ class MyPlugin(Star):
                     return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：字段删除错误"}
             
             try:
-                return self.run(base_json, self.text2img_url)
+                return await self.run(base_json, self.text2img_url)
             except Exception as e:
                 logger.info(f"flux模式调用文生图请求失败，原因：{e}")
                 return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：请求失败"}
@@ -314,11 +315,11 @@ class MyPlugin(Star):
             else:
                 base_json = model[config.mgType]
             logger.info("当前生图类型为"+str(config.mgType))
-            return self.run(base_json, self.confyui_url)
+            return await self.run(base_json, self.confyui_url)
         else:
             logger.info("图片类型错误，或者数值超出大小")
             return {"code": 2, "msg": "设置图片类型错误"}
-    def exextract_letters(self,text):
+    async def exextract_letters(self,text):
         latters = re.findall(r'[a-zA-Z]', text)
         return " ".join(latters)
     def has_chinese(self,text):
@@ -343,12 +344,34 @@ class MyPlugin(Star):
         system_prompt=sysPrompt  # 系统提示，可以不传
     )
         return llm_response.result_chain.chain[0].text
-    def run(self, data, url, timeout=120):
+    async def run(self, data, url, timeout=120):
         """
         发送任务到生图接口，直到返回image为止，失败抛出异常信息
         """
         start_time = time.time()  # 记录开始时间
         # 这里提交任务，校验是否提交成功，并且获取任务ID
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url=url, headers=self.headers, json=data)
+            response.raise_for_status()
+            progress = response.json()# 获取响应数据
+            if progress["code"]==0:
+                while True:
+                    current_time = time.time()
+                    if(current_time - start_time)>timeout:
+                        logger.info(f"在发起生图任务后{current_time-start_time}秒，未获取到任务ID，已退出轮询。")
+                        return {"code": 1, "msg": "任务已经超时，文生图失败"}
+                    generate_uuid = progress["data"]['generateUuid']# 获取任务ID
+                    data = {"generateUuid":generate_uuid}# 装载任务ID
+                    response = await client.post(url=self.generate_url, headers=self.headers, json=data)# 根据已创建的任务id发送请求，进行任务状态查询
+                    response.raise_for_status()# 检查响应是否成功
+                    progress = response.json()# 获取响应数据
+                    if progress['data'].get('images') and any(image for image in progress['data']['images'] if image is not None):
+                        logger.info("图片生成完成")
+                        return progress
+                    time.sleep(self.interval)# 等待一段时间后再次轮询
+            else:
+                return {"code": 1, "msg": "任务创建失败"}
+            """
         response = requests.post(url=url, headers=self.headers, json=data)# 发送请求
         response.raise_for_status()# 检查响应是否成功
         progress = response.json()# 获取响应数据
@@ -372,6 +395,7 @@ class MyPlugin(Star):
                 time.sleep(self.interval)
         else:
             return f'任务失败,原因：code {progress["msg"]}'
+            """
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
     @filter.command("ltest")
