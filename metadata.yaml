@@ -1,5 +1,5 @@
 name: liblibApi # 这是你的插件的唯一识别名。
-desc: 一个强大的AI文生图插件，基于LiblibAI的API服务，支持多种绘图模式和自定义模型配置。可自定义大模型和lora模型- 支持中英文提示词（中文会自动翻译为英文提示词）- 灵活的参数配置- 支持自定义工作流 # 插件简短描述
+desc: 一个功能强大的AI文生图插件，基于LiblibAI的API服务。支持SD1.5/XL、Flux和ComfyUI三种绘图模式，可自由搭配大模型和LoRA模型实现个性化创作。内置中英文提示词翻译功能，支持多种翻译模式。 # 插件简短描述
 version: v1.0.5 # 插件版本号。格式：v1.1.1 或者 v1.1
 author: machinad # 作者
 repo: https://github.com/machinad/astrbot_plugin_liblibapi # 插件的仓库地址

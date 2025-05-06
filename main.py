@@ -32,7 +32,7 @@ class text2imgConfig:
         self.istranslate = istranslate
         self.translateType = translateType
 
-@register("liblibApi", "machinad", "一个强大的AI文生图插件，基于LiblibAI的API服务，支持多种绘图模式和自定义模型配置。可自定义大模型和lora模型- 支持中英文提示词（中文会自动翻译为英文提示词）- 灵活的参数配置- 支持自定义工作流", "1.0.5")
+@register("liblibApi", "machinad", "一个功能强大的AI文生图插件，基于LiblibAI的API服务。支持SD1.5/XL、Flux和ComfyUI三种绘图模式，可自由搭配大模型和LoRA模型实现个性化创作。", "1.0.5")
 class MyPlugin(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
