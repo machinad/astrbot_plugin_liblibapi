@@ -377,7 +377,7 @@ class MyPlugin(Star):
     @filter.command("ltest")
     async def ltest(self, event: AstrMessageEvent):
         """
-        测试保留指令，也可以这这个指令翻译提示词
+        测试保留指令，请无视这个命令
         """
         message_str = event.message_str
         parts = message_str.split(" ",1)
