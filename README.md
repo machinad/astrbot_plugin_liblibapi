@@ -117,7 +117,7 @@
     - 默认值：0.9
     - 说明：控制Flux LoRA效果的强度
 
-#### 3. ComfyUI模式配置
+#### 3. ComfyUI模式配置（详情请参考高级用户 - Confyui工作流）
 - `confyui_overwriting`：ComfyUI的API配置
   - 类型：文本（JSON格式）
   - 用途：自定义API调用配置
@@ -232,87 +232,56 @@ _在模型详情页面的地址栏中找到并复制模型ID_
 
 1. 在插件配置中：
    - 将绘图模式设置为"confyui模式"
-   - 将复制的API配置JSON粘贴到对应的配置项中
-
+   - 将复制的API配置JSON粘贴到confyui的api覆写文本框中
+   - 为了方便自定义API调用插件配置，可以把以下几个占位符填入API对应的值中：{{prompt}}:提示词、{{height}}:高度、{{width}}:宽度、{{seed}}:随机种子、{{steps}}:推理步数。用法示例{"prompt":"{{prompt}}","height":{{height}}, "width":{{width}}, "seed":{{seed}}, "steps":{{steps}} }
 2. API配置示例：
 ```json
-            "confyui模式":{
-                "templateUuid": "4df2efa0f18d46dc9758803e478eb51c",
-                "generateParams": {
-                "5": {
-                    "class_type": "EmptyLatentImage",
-                    "inputs": {
-                        "width": config.width,
-                        "height": config.height,
-                        "batch_size": 1
-                    }
-                },
-                "10": {
-                    "class_type": "UNETLoader",
-                    "inputs": {
-                        "unet_name": "412b427ddb674b4dbab9e5abd5ae6057",
-                        "weight_dtype": "fp8_e4m3fn"
-                    }
-                
-                },
-                "11": {
-                    "class_type": "DualCLIPLoader",
-                    "inputs": {
-                        "clip_name1": "clip_l",
-                        "clip_name2": "t5xxl_fp8_e4m3fn",
-                        "type": "flux",
-                        "device": "default"
-                    }
-                
-                },
-                "13": {
-                    "class_type": "LoraLoader",
-                    "inputs": {
-                        "lora_name": "92b126744e7b49dfb76202b094d406e9",
-                        "strength_model": 0.6,
-                        "strength_clip": 2
-                    }
-                },
-                "15": {
-                    "class_type": "CLIPTextEncodeFlux",
-                    "inputs": {
-                        "clip_l": "",
-                    "t5xxl": uPrompt,
-                    "guidance": 3.5
-                    }
-                
-                 },
-                "16": {
-                    "class_type": "VAELoader",
-                    "inputs": {
-                        "vae_name": "ae.sft"
-                    }
-                
-                 },
-                "17": {
-                    "class_type": "FluxSamplerParams+",
-                    "inputs": {
-                        "seed": "49375",
-                        "sampler": "euler",
-                        "scheduler": "simple",
-                        "steps": "15",
-                        "guidance": "3.5",
-                        "max_shift": "",
-                        "base_shift": "",
-                        "denoise": ""
-                    }
-                },
-                "19": {
-                    "class_type": "LoraLoader",
-                    "inputs": {
-                        "lora_name": "60cdd0badb844e039aa3cf0d9908f70e",
-                        "strength_model": 0.6,
-                        "strength_clip": 2
-                    }
-                },
-                "workflowUuid": "f454f4a44bc440ca9427ca48c931598e"
-                }
+            {
+    "templateUuid": "4df2efa0f18d46dc9758803e478eb51c",
+    "generateParams": {
+        "3": {
+            "class_type": "KSampler",
+            "inputs": {
+                "seed": 377101986110064,
+                "steps": 28,
+                "cfg": 7
             }
+        },
+        "4": {
+            "class_type": "CheckpointLoaderSimple",
+            "inputs": {
+                "ckpt_name": "2f32e43f45134387833cb87fa4122df5"
+            }
+        },
+        "5": {
+            "class_type": "EmptyLatentImage",
+            "inputs": {
+                "width": {{width}},
+                "height": {{height}},
+            }
+        },
+        "18": {
+            "class_type": "LoraLoader",
+            "inputs": {
+                "lora_name": "4005bc6195d54ee79bbce75bc7c7d7aa",
+                "strength_model": 0.8999999999999999
+            }
+        },
+        "19": {
+            "class_type": "JjkText",
+            "inputs": {
+                "text": "{{prompt}}"
+            }
+        },
+        "20": {
+            "class_type": "LatentUpscaleBy",
+            "inputs": {
+                "scale_by": 2
+            }
+        },
+        "workflowUuid": "955b8928c9604ef3931bbd35d08a4239"
+    }
+}
 ```
 
 ### 使用建议
