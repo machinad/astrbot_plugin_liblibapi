@@ -2,6 +2,23 @@
 
 一个强大的AI文生图插件，基于LiblibAI的API服务，支持多种绘图模式和自定义模型配置。
 
+## 实际效果展示
+
+### 基础绘图效果
+![基础绘图效果](https://github.com/machinad/astrbot_plugin_liblibapi/blob/master/src/10003.png)
+
+_使用基础绘图命令生成的图片效果展示_
+
+### 提示词翻译效果
+![提示词翻译效果](https://github.com/machinad/astrbot_plugin_liblibapi/blob/master/src/10004.png)
+
+_展示中文提示词自动翻译为优化的英文提示词的效果_
+
+### 自定义模型效果
+![自定义模型效果](https://github.com/machinad/astrbot_plugin_liblibapi/blob/master/src/10005.png)
+
+_使用自定义模型和LoRA生成的精美图片效果_
+
 ## 功能特点
 
 - 支持三种绘图模式：sd1.5/XL模式、flux模式和confyui模式
@@ -9,6 +26,23 @@
 - 支持中英文提示词（中文会自动翻译为英文提示词）
 - 灵活的参数配置
 - 支持自定义工作流
+
+## 使用效果展示
+
+### 基础使用界面
+![基础使用界面](https://github.com/machinad/astrbot_plugin_liblibapi/blob/master/src/10003.png)
+
+_插件的基本使用界面，展示了主要的配置选项和参数设置_
+
+### 提示词翻译效果
+![提示词翻译效果](https://github.com/machinad/astrbot_plugin_liblibapi/blob/master/src/10004.png)
+
+_展示了中文提示词自动翻译为英文的效果，支持多种翻译模式_
+
+### 图片生成效果
+![图片生成效果](https://github.com/machinad/astrbot_plugin_liblibapi/blob/master/src/10005.png)
+
+_展示了使用不同模式和参数生成的图片效果_
 
 ## 安装前准备
 
