@@ -236,7 +236,7 @@ _在模型详情页面的地址栏中找到并复制模型ID_
    - 为了方便自定义API调用插件配置，可以把以下几个占位符填入API对应的值中：{{prompt}}:提示词、{{height}}:高度、{{width}}:宽度、{{seed}}:随机种子、{{steps}}:推理步数。用法示例{"prompt":"{{prompt}}","height":{{height}}, "width":{{width}}, "seed":{{seed}}, "steps":{{steps}} }
 2. API配置示例：
 ```json
-            {
+{
     "templateUuid": "4df2efa0f18d46dc9758803e478eb51c",
     "generateParams": {
         "3": {
@@ -257,7 +257,7 @@ _在模型详情页面的地址栏中找到并复制模型ID_
             "class_type": "EmptyLatentImage",
             "inputs": {
                 "width": {{width}},
-                "height": {{height}},
+                "height": {{height}}
             }
         },
         "18": {
