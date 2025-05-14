@@ -183,8 +183,8 @@ class liblibApi(Star):
                         {
                             "unitOrder": 1,
                             "sourceImage": "",
-                            "width": 1024,
-                            "height": 1024,
+                            "width": config.width,
+                            "height": config.height,
                             "preprocessor": 2,
                             "annotationParameters":{
                                 "depthMidas":{
@@ -324,6 +324,7 @@ class liblibApi(Star):
 
             textB = await self.LLMmessage(llm_pormpt,sysPormpt)#获取翻译结果
             uPrompt = textA + textB#拼接翻译结果
+            model[config.mgType]["generateParams"]["prompt"] = uPrompt#替换prompt
             logger.info("翻译完成，翻译结果为："+str(uPrompt))
 
 
