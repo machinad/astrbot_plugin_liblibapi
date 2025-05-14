@@ -56,7 +56,7 @@ class text2imgConfig:
         self.translateType = translateType
         self.img_url = img_url
 
-@register("liblibApi", "machinad", "一个功能强大的AI文生图插件，基于LiblibAI的API服务。支持SD1.5/XL、Flux和ComfyUI三种绘图模式，可自由搭配大模型和LoRA模型实现个性化创作。", "1.0.6")
+@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.0.7")
 class MyPlugin(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
@@ -80,16 +80,18 @@ class MyPlugin(Star):
         self.signature_nonce = uuid.uuid1()#获取uuid
         self.signature_img = self._hash_sk(self.sk, self.time_stamp, self.signature_nonce)#获取签名
         self.singature_confyui = self._hash_confyui(self.sk, self.time_stamp, self.signature_nonce)#获取签名,confyui专用
-        self.signature_img_post = self._has_sk_imgPost(self.sk, self.time_stamp, self.signature_nonce)#获取签名
+        self.signature_img_post = self._has_sk_imgPost(self.sk, self.time_stamp, self.signature_nonce)#获取图片上传签名
         self.signature_ultra_img = self._hash_ultra_sk(self.sk, self.time_stamp, self.signature_nonce)#获取签名,暂时无用，请忽略
         self.signature_status = self._hash_sk_status(self.sk, self.time_stamp, self.signature_nonce)#获取签名,用于获取状态
+        self.signature_getVersion = self._has_sk_getVersion(self.sk, self.time_stamp, self.signature_nonce)#获取签名,用于获取版本
         self.interval = interval
         self.headers = {'Content-Type': 'application/json'}
-        self.text2img_url = self.get_image_url(self.ak, self.signature_img, self.time_stamp,self.signature_nonce)#获取url
-        self.confyui_url = self.get_confyui_url(self.ak, self.singature_confyui, self.time_stamp,self.signature_nonce)
-        self.text2img_ultra_url = self.get_ultra_image_url(self.ak, self.signature_ultra_img, self.time_stamp,self.signature_nonce)
-        self.generate_url = self.get_generate_url(self.ak, self.signature_status, self.time_stamp,self.signature_nonce)
-        self.imgPost_url = self.get_imgPost_url(self.ak, self.signature_img_post, self.time_stamp,self.signature_nonce)
+        self.text2img_url = self.get_image_url(self.ak, self.signature_img, self.time_stamp,self.signature_nonce)#获取文生图url
+        self.confyui_url = self.get_confyui_url(self.ak, self.singature_confyui, self.time_stamp,self.signature_nonce)#confyui模式的url
+        self.text2img_ultra_url = self.get_ultra_image_url(self.ak, self.signature_ultra_img, self.time_stamp,self.signature_nonce)#无用的url
+        self.generate_url = self.get_generate_url(self.ak, self.signature_status, self.time_stamp,self.signature_nonce)#获取状态url
+        self.imgPost_url = self.get_imgPost_url(self.ak, self.signature_img_post, self.time_stamp,self.signature_nonce)#图片上传url
+        self.getVersion_url = self.get_getVersion_url(self.ak, self.signature_getVersion, self.time_stamp,self.signature_nonce)#获取版本url
         self.path = Path("./data/plugins_data/liblib")
         super().__init__(context)
     def hmac_sha1(self, key, code):#加密
@@ -121,6 +123,11 @@ class MyPlugin(Star):
         data = "/api/generate/upload/signature"+"&"+str(s_time)+"&"+str(ro)
         s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()
         return s
+    def _has_sk_getVersion(self,key, s_time, ro):
+        """加密sk"""
+        data = "/api/model/version/get"+"&"+str(s_time)+"&"+str(ro)
+        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()
+        return s
     def get_image_url(self, ak, signature, time_stamp, signature_nonce):
 
         url = f"https://openapi.liblibai.cloud/api/generate/webui/text2img?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
@@ -141,6 +148,9 @@ class MyPlugin(Star):
         return url
     def get_imgPost_url(self,ak,signature,time_stamp,signature_nonce):
         url = f"https://openapi.liblibai.cloud/api/generate/upload/signature?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
+        return url
+    def get_getVersion_url(self,ak,signature,time_stamp,signature_nonce):
+        url = f"https://openapi.liblibai.cloud/api/model/version/get?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
         return url
     async def text2img(self, config: text2imgConfig):
         uPrompt = config.message_str
@@ -409,7 +419,9 @@ class MyPlugin(Star):
         调用LLM翻译提示词
         """
         Prompt = event.message_str
-        Context = []
+        Context = [
+            Comp.Plain(f"图片已经生成，消耗点数：{pointsCost}，账户余额：{accountBalance}")
+        ]
         llm_response = await self.context.get_using_provider().text_chat(
         prompt=Prompt,
         session_id=None, # 此已经被废弃
@@ -445,39 +457,32 @@ class MyPlugin(Star):
                     time.sleep(self.interval)# 等待一段时间后再次轮询
             else:
                 return {"code": {progress["code"]}, "msg": {progress["msg"]}}
-            """
-        response = requests.post(url=url, headers=self.headers, json=data)# 发送请求
-        response.raise_for_status()# 检查响应是否成功
-        progress = response.json()# 获取响应数据
-        if progress['code'] == 0:
-            # 如果获取到任务ID，执行等待生图
-            while True:
-                current_time = time.time()
-                if (current_time - start_time) > timeout:
-                    logger.info(f"{timeout}任务超时，已退出轮询。")
-                    return None
-
-                generate_uuid = progress["data"]['generateUuid']# 获取任务ID
-                data = {"generateUuid": generate_uuid}# 构造请求数据
-                response = requests.post(url=self.generate_url, headers=self.headers, json=data)# 发送请求
-                response.raise_for_status()# 检查响应是否成功
-                progress = response.json()# 获取响应数据
-
-                if progress['data'].get('images') and any(image for image in progress['data']['images'] if image is not None):
-                    logger.info(f"任务完成，获取到图像数据。")
-                    return progress
-                time.sleep(self.interval)
-        else:
-            return f'任务失败,原因：code {progress["msg"]}'
-            """
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
-    @filter.command("ltest")
-    async def ltest(self, event: AstrMessageEvent):
+    @filter.command("lcha")
+    async def lcha(self, event: AstrMessageEvent):
         """
-        测试保留指令，请无视这个命令
+        模型参数查询命令格式为/lcha f454f4a44bc440ca9427ca48c931598e
         """
-        
+        message = event.message_obj.message
+        message_str = self.textFilter(message)
+        parts = str(message_str).split(" ",1)
+        prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
+        data = {
+            "versionUuid": str(prompt),
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url=self.getVersion_url, headers=self.headers, json=data)
+            response.raise_for_status()
+            progress = response.json()
+            logger.info("模型查询参数为"+str(progress))
+            yield event.plain_result(
+                f"已经查询到模型信息：\n"
+                f"模型ID：{progress.get('data', {}).get('versionUuid')}\n"
+                f"模型名称：{progress.get('data', {}).get('modelName')}\n"
+                f"模型版本：{progress.get('data', {}).get('versionName')}\n"
+                f"基础算法：{progress.get('data', {}).get('baseAlgoName')}\n"
+                )
     def textFilter(self,message:list)->str:
         for msg in message:
             if msg.type == "Plain":
@@ -488,51 +493,6 @@ class MyPlugin(Star):
             if msg.type == "Image":
                 return msg.url
         return None
-    async def upload_image(self,progress:dict,image_file,save_path:bytes):
-        async with httpx.AsyncClient() as client:
-            data = {
-                'key': progress["data"]["key"],
-                'policy': progress["data"]["policy"],
-                'x-oss-date': progress["data"]["xOssDate"],
-                'x-oss-expires': progress["data"]["xOssExpires"],
-                'x-oss-signature': progress["data"]["xOssSignature"],
-                'x-oss-credential': progress["data"]["xOssCredential"],
-                'x-oss-signature-version': progress["data"]["xOssSignatureVersion"],
-            }
-            files = {
-                #'file': (image_file, open(save_path, 'rb'), 'image/png')
-                'file': (image_file, save_path, 'image/png')
-            }
-            try:
-                response = await client.post(progress["data"]["postUrl"],data=data, files=files)
-                response.raise_for_status()
-                return progress.get("data").get("postUrl")+"/"+progress.get("data").get("key")
-            except Exception as e:
-                logger.info(f"图片上传请求发起失败，原因：{e}")
-                return {"code": 1, "msg": "图片上传请求发起失败，原因："+str(e)}
-    async def download_image(self, url: str):
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            return response.content
-            #os.makedirs(os.path.dirname(save_path), exist_ok=True)
-           # with open(save_path, "wb") as f:
-                #f.write(response.content)
-                #logger.info(f"图片保存成功，保存路径为{save_path}")
-    async def signature_image(self,url:str,name:str):
-        data = {
-            "name": name,
-            "extension" : "png"
-        }
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, headers=self.headers, json=data)
-            response.raise_for_status()
-            progress = response.json()
-            return progress
-    async def aa(self,url:str):
-        image_name = "image"+str(uuid.uuid1())
-        image_file = image_name+"."+"png"
-        await self.download_image(url,save_path)
     @filter.command("limg")
     async def limg(self, event: AstrMessageEvent):
         """
@@ -600,3 +560,81 @@ class MyPlugin(Star):
             return
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
+
+
+    async def download_image(self, url: str):
+        """
+        下载图片并返回二进制数据
+        """
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(url)
+                response.raise_for_status()
+            except Exception as e:
+                logger.info(f"图片下载失败，原因：{e}")
+                return None
+            return response.content
+
+    async def signature_image(self,url:str,name:str):
+        """
+        图片上传请求发起，获取回调签名参数，用于上传图片
+        """
+        data = {
+            "name": name,
+            "extension" : "png"
+        }
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, headers=self.headers, json=data)
+                response.raise_for_status()
+                progress = response.json()
+            except Exception as e:
+                logger.info(f"图片上传请求发起失败，原因：{e}")
+                return None
+            return progress
+
+    async def upload_image(self,progress:dict,image_file,save_path:bytes):
+        """
+        对图片二进制数据进行签名并上传
+        """
+        async with httpx.AsyncClient() as client:
+            data = {
+                'key': progress["data"]["key"],
+                'policy': progress["data"]["policy"],
+                'x-oss-date': progress["data"]["xOssDate"],
+                'x-oss-expires': progress["data"]["xOssExpires"],
+                'x-oss-signature': progress["data"]["xOssSignature"],
+                'x-oss-credential': progress["data"]["xOssCredential"],
+                'x-oss-signature-version': progress["data"]["xOssSignatureVersion"],
+            }
+            files = {
+                'file': (image_file, save_path, 'image/png')
+            }
+            try:
+                response = await client.post(progress["data"]["postUrl"],data=data, files=files)
+                response.raise_for_status()
+                return progress.get("data").get("postUrl")+"/"+progress.get("data").get("key")
+            except Exception as e:
+                logger.info(f"图片上传失败，原因：{e}")
+                return None
+
+    async def get_signature_image_url(self,url:str,post_url):
+        """
+        该方法用于将消息平台的图片链接转换为liblib的api可以直接调用的图片链接
+        该方法会先将图片下载到本地，然后再签名上传到服务器，最后返回图片链接
+        """
+        image_name = "image"+str(uuid.uuid1())
+        image_file = image_name+"."+"png"
+        imge_byte = await self.download_image(url)
+        if imge_byte is None:
+            logger.info("图片二进制数据下载下载失败")
+            return None
+        progress = await self.signature_image(post_url,image_name)
+        if progress is None:
+            logger.info("图片上传请求发起失败,未获得签名数据")
+            return None
+        get_url = await self.upload_image(progress,image_file,imge_byte)
+        if get_url is None:
+            logger.info("图片上传失败,未能获取到图片链接")
+            return None
+        return get_url
