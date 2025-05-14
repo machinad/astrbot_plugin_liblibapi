@@ -1,12 +1,7 @@
-from cmd import PROMPT
-from curses import nonl
-from math import fabs
-import os
 from pathlib import Path
 import re
 import httpx
-import ssl
-from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
+from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 import astrbot.api.message_components as Comp
@@ -14,7 +9,6 @@ import hmac
 import base64
 import time
 import json
-import requests
 from datetime import datetime
 import hashlib
 import uuid
@@ -57,7 +51,7 @@ class text2imgConfig:
         self.img_url = img_url
 
 @register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.0.7")
-class MyPlugin(Star):
+class liblibApi(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
         self.sk = config.get("SecretKey")#获取sk
@@ -85,7 +79,7 @@ class MyPlugin(Star):
         self.signature_status = self._hash_sk_status(self.sk, self.time_stamp, self.signature_nonce)#获取签名,用于获取状态
         self.signature_getVersion = self._has_sk_getVersion(self.sk, self.time_stamp, self.signature_nonce)#获取签名,用于获取版本
         self.interval = interval
-        self.headers = {'Content-Type': 'application/json'}
+        self.headers = {"Content-Type": "application/json"}
         self.text2img_url = self.get_image_url(self.ak, self.signature_img, self.time_stamp,self.signature_nonce)#获取文生图url
         self.confyui_url = self.get_confyui_url(self.ak, self.singature_confyui, self.time_stamp,self.signature_nonce)#confyui模式的url
         self.text2img_ultra_url = self.get_ultra_image_url(self.ak, self.signature_ultra_img, self.time_stamp,self.signature_nonce)#无用的url
@@ -100,33 +94,33 @@ class MyPlugin(Star):
     def _hash_sk(self, key, s_time, ro):
         """加密sk"""
         data = "/api/generate/webui/text2img" + "&" + str(s_time) + "&" + str(ro)
-        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()
+        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()  # noqa: Q000
         return s
     def _hash_confyui(self,key,s_time,ro):
         """加密sk"""
         data = "/api/generate/comfyui/app" + "&" + str(s_time) + "&" + str(ro)
-        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()
+        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()  # noqa: Q000
         return s
     def _hash_ultra_sk(self, key, s_time, ro):
         """加密sk"""
         data = "/api/generate/webui/text2img/ultra" + "&" + str(s_time) + "&" + str(ro)
-        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()
+        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()  # noqa: Q000
         return s
 
     def _hash_sk_status(self, key, s_time, ro):
         """加密sk"""
         data = "/api/generate/webui/status" + "&" + str(s_time) + "&" + str(ro)
-        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()
+        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()  # noqa: Q000
         return s
     def _has_sk_imgPost(self,key, s_time, ro):
         """加密sk"""
         data = "/api/generate/upload/signature"+"&"+str(s_time)+"&"+str(ro)
-        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()
+        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()  # noqa: Q000
         return s
     def _has_sk_getVersion(self,key, s_time, ro):
         """加密sk"""
         data = "/api/model/version/get"+"&"+str(s_time)+"&"+str(ro)
-        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()
+        s = base64.urlsafe_b64encode(self.hmac_sha1(key, data)).rstrip(b'=').decode()  # noqa: Q000
         return s
     def get_image_url(self, ak, signature, time_stamp, signature_nonce):
 
@@ -198,7 +192,7 @@ class MyPlugin(Star):
                                 }
                             },
                             "model": "cf63d214734760dcdc108b1bd094921b",
-                            "controlWeight": 1, 
+                            "controlWeight": 1,
                             "startingControlStep": 0,
                             "endingControlStep": 1,
                             "pixelPerfect": 1,
@@ -244,7 +238,7 @@ class MyPlugin(Star):
                         "unet_name": "412b427ddb674b4dbab9e5abd5ae6057",
                         "weight_dtype": "fp8_e4m3fn"
                     }
-                
+
                 },
                 "11": {
                     "class_type": "DualCLIPLoader",
@@ -254,7 +248,7 @@ class MyPlugin(Star):
                         "type": "flux",
                         "device": "default"
                     }
-                
+
                 },
                 "13": {
                     "class_type": "LoraLoader",
@@ -271,14 +265,14 @@ class MyPlugin(Star):
                     "t5xxl": uPrompt,
                     "guidance": 3.5
                     }
-                
+
                  },
                 "16": {
                     "class_type": "VAELoader",
                     "inputs": {
                         "vae_name": "ae.sft"
                     }
-                
+
                  },
                 "17": {
                     "class_type": "FluxSamplerParams+",
@@ -327,7 +321,7 @@ class MyPlugin(Star):
             llm_pormpt = text2imgConfig(
                 message_str = config.message_str,
             )#获取一个新的用户消息实例
-            
+
             textB = await self.LLMmessage(llm_pormpt,sysPormpt)#获取翻译结果
             uPrompt = textA + textB#拼接翻译结果
             logger.info("翻译完成，翻译结果为："+str(uPrompt))
@@ -339,7 +333,7 @@ class MyPlugin(Star):
         if config.mgType == "sd1.5/XL模式(可自定义模型)":
             logger.info("当前生图类型为"+str(config.mgType))
             base_json = model[config.mgType]
-            if config.img_url != None:
+            if config.img_url is not None:
                 image_name = "image"+str(uuid.uuid1())
                 image_file = image_name+"."+"png"
                 image_bt = await self.download_image(config.img_url)
@@ -354,7 +348,7 @@ class MyPlugin(Star):
                 logger.info("未开启lora模型，移除lora")
                 del base_json["generateParams"]["additionalNetwork"]
             logger.info("调用文生图接口:请求体为："+str(base_json))
-            
+
 
             return await self.run(base_json, self.text2img_url)
 
@@ -374,7 +368,7 @@ class MyPlugin(Star):
                 except Exception as e:
                     logger.info(f"lora字段删除错误：{e}")
                     return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：字段删除错误"}
-            
+
             try:
                 return await self.run(base_json, self.text2img_url)
             except Exception as e:
@@ -404,14 +398,14 @@ class MyPlugin(Star):
             logger.info("图片类型错误，或者数值超出大小")
             return {"code": 2, "msg": "设置图片类型错误"}
     async def exextract_letters(self,text):
-        latters = re.findall(r'[a-zA-Z]', text)
+        latters = re.findall(r"[a-zA-Z]", text)
         return " ".join(latters)
     def has_chinese(self,text):
         """
         检查字符串中是否包含中文字符
         """
         for char in text:
-            if '\u4e00' <= char <= '\u9fff':
+            if "\u4e00" <= char <= "\u9fff":
                 return True
         return False
     async def LLMmessage(self,event:text2imgConfig,sysPrompt):
@@ -419,9 +413,7 @@ class MyPlugin(Star):
         调用LLM翻译提示词
         """
         Prompt = event.message_str
-        Context = [
-            Comp.Plain(f"图片已经生成，消耗点数：{pointsCost}，账户余额：{accountBalance}")
-        ]
+        Context = []
         llm_response = await self.context.get_using_provider().text_chat(
         prompt=Prompt,
         session_id=None, # 此已经被废弃
@@ -446,15 +438,15 @@ class MyPlugin(Star):
                     if(current_time - start_time)>timeout:
                         logger.info(f"在发起生图任务后{current_time-start_time}秒，未获取到任务ID，已退出轮询。")
                         return {"code": 1, "msg": "任务已经超时，文生图失败"}
-                    generate_uuid = progress["data"]['generateUuid']# 获取任务ID
+                    generate_uuid = progress["data"]["generateUuid"]# 获取任务ID
                     data = {"generateUuid":generate_uuid}# 装载任务ID
                     response = await client.post(url=self.generate_url, headers=self.headers, json=data)# 根据已创建的任务id发送请求，进行任务状态查询
                     response.raise_for_status()# 检查响应是否成功
                     progress = response.json()# 获取响应数据
-                    if progress['data'].get('images') and any(image for image in progress['data']['images'] if image is not None):
+                    if progress["data"].get("images") and any(image for image in progress["data"]["images"] if image is not None):
                         logger.info("图片生成完成")
                         return progress
-                    time.sleep(self.interval)# 等待一段时间后再次轮询
+                    time.sleep(self.interval)# 等待一段时间后再次轮询  # noqa: ASYNC251
             else:
                 return {"code": {progress["code"]}, "msg": {progress["msg"]}}
     async def initialize(self):
@@ -527,17 +519,17 @@ class MyPlugin(Star):
             img_url=image_url
         )# 构造请求数据
         #yield event.plain_result(f"获取用户原始数据")
-        
-        
+
+
         #yield event.plain_result(f"提取提示词"+prompt)
-       
+
         #yield event.plain_result(f"配置实例初始化完成")
         try:
             Progess = await self.text2img(textImgageConfig)# 发送请求
         except Exception as e:
             yield event.plain_result(f"调用文生图接口失败，原因：{e}")
             return
-        #yield event.plain_result(f"调用文生图接口") 
+        #yield event.plain_result(f"调用文生图接口")
         #yield event.plain_result("回调参数"+str(Progess))
         logger.info(str(Progess))# 返回原始信息
         code = Progess.get("code",None)# 获取状态码
@@ -599,16 +591,16 @@ class MyPlugin(Star):
         """
         async with httpx.AsyncClient() as client:
             data = {
-                'key': progress["data"]["key"],
-                'policy': progress["data"]["policy"],
-                'x-oss-date': progress["data"]["xOssDate"],
-                'x-oss-expires': progress["data"]["xOssExpires"],
-                'x-oss-signature': progress["data"]["xOssSignature"],
-                'x-oss-credential': progress["data"]["xOssCredential"],
-                'x-oss-signature-version': progress["data"]["xOssSignatureVersion"],
+                "key": progress["data"]["key"],
+                "policy": progress["data"]["policy"],
+                "x-oss-date": progress["data"]["xOssDate"],
+                "x-oss-expires": progress["data"]["xOssExpires"],
+                "x-oss-signature": progress["data"]["xOssSignature"],
+                "x-oss-credential": progress["data"]["xOssCredential"],
+                "x-oss-signature-version": progress["data"]["xOssSignatureVersion"],
             }
             files = {
-                'file': (image_file, save_path, 'image/png')
+                "file": (image_file, save_path, "image/png")
             }
             try:
                 response = await client.post(progress["data"]["postUrl"],data=data, files=files)
