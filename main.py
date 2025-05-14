@@ -483,7 +483,9 @@ class liblibApi(Star):
     def imageFilter(self,message:list)->str:
         for msg in message:
             if msg.type == "Image":
-                return msg.url
+                image_url = msg.url
+                image_url = image_url.replace("https","http")
+                return image_url
         return None
     @filter.command("limg")
     async def limg(self, event: AstrMessageEvent):
@@ -495,7 +497,6 @@ class liblibApi(Star):
         #message_str = event.message_str # 用户发的纯文本消息字符串
         message = event.message_obj.message# 用户发的消息对象
         image_url = self.imageFilter(message)
-        image_url = image_url.replace("https","http")
         message_str = self.textFilter(message)
         parts = str(message_str).split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
