@@ -50,7 +50,7 @@ class text2imgConfig:
         self.translateType = translateType
         self.img_url = img_url
 
-@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.0.9")
+@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.1.0")
 class liblibApi(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
@@ -398,31 +398,6 @@ class liblibApi(Star):
         else:
             logger.info("图片类型错误，或者数值超出大小")
             return {"code": 2, "msg": "设置图片类型错误"}
-    async def exextract_letters(self,text):
-        latters = re.findall(r"[a-zA-Z]", text)
-        return "".join(latters)+","
-    def has_chinese(self,text):
-        """
-        检查字符串中是否包含中文字符
-        """
-        for char in text:
-            if "\u4e00" <= char <= "\u9fff":
-                return True
-        return False
-    async def LLMmessage(self,event:text2imgConfig,sysPrompt):
-        """
-        调用LLM翻译提示词
-        """
-        Prompt = event.message_str
-        Context = []
-        llm_response = await self.context.get_using_provider().text_chat(
-        prompt=Prompt,
-        session_id=None, # 此已经被废弃
-        contexts=Context, # 也可以用上面获得的用户当前的对话记录 context
-        image_urls=[], # 图片链接，支持路径和网络链接
-        system_prompt=sysPrompt  # 系统提示，可以不传
-    )
-        return llm_response.result_chain.chain[0].text
     async def run(self, data, url, timeout=120):
         """
         发送任务到生图接口，直到返回image为止，失败抛出异常信息
@@ -444,6 +419,7 @@ class liblibApi(Star):
                     response = await client.post(url=self.generate_url, headers=self.headers, json=data)# 根据已创建的任务id发送请求，进行任务状态查询
                     response.raise_for_status()# 检查响应是否成功
                     progress = response.json()# 获取响应数据
+                    logger.info("当前任务状态为："+str(progress.get("data").get("generateStatus"))+"进度为："+str(progress.get("data").get("percentCompleted")*100)+"%")
                     if progress["data"].get("images") and any(image for image in progress["data"]["images"] if image is not None):
                         logger.info("图片生成完成")
                         return progress
@@ -500,6 +476,50 @@ class liblibApi(Star):
         config = text2imgConfig(message_str=prompt,istranslate=self.istranslate,translateType=self.translateType)# 获取一个新的用户消息实例
         text = await self.prompt_Translation(config)
         yield event.plain_result("翻译结果为："+text)
+    @filter.command("lsd")
+    async def ltest(self, event: AstrMessageEvent):
+        """
+        直接调用sd1.5/XL模式(可自定义模型)指令格式为：/lsd 一个女孩，带着墨镜
+        """
+        message = event.message_obj.message
+        image_url = self.imageFilter(message)
+        message_str = self.textFilter(message)
+        parts = str(message_str).split(" ",1)
+        prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
+        config = text2imgConfig(
+            width = self.width,
+            height = self.height,
+            steps = self.steps,
+            seed = self.seed,
+            mgType = str(self.imgType),
+            modelId = self.modelId,
+            sd_loraModelId = self.sd_loraModelId,
+            sd_loraWeight = self.sd_loraWeight,
+            flux_loraModelId = self.flux_loraModelId,
+            flux_loraWeight = self.flux_loraWeight,
+            message_str = prompt,
+            isS = self.isSdLora,
+            isF = self.isFluxLora,
+            confyui_api = self.confyui_api,
+            istranslate=self.istranslate,
+            translateType=self.translateType,
+            img_url=image_url
+        )
+        progess = await self.text_to_image_sd(config)
+        if progess.get("code") == 0:
+            chain = [
+                Comp.At(qq=event.get_sender_id()), # At 消息发送者
+                Comp.Plain(f"图片已经生成:"
+                           f"\n消耗点数：{progess.get('pointsCost')}，账户余额：{progess.get('accountBalance')}"
+                           f"\n使用模型：{progess.get('modelName')}，使用算法：{progess.get('baseAlgoName')}"
+                           f"\n提示词：{progess.get('prompt')}"
+                           f"\n生图种子：{progess.get('seed')}"
+                           ),
+                Comp.Image.fromURL(progess.get("imageUrl","")) # 从 URL 发送图片
+            ]
+            yield event.chain_result(chain)
+        else:
+            yield event.plain_result("图片生成失败，原因："+str(progess.get("msg")))
     @filter.command("limg")
     async def limg(self, event: AstrMessageEvent):
         """
@@ -566,7 +586,188 @@ class liblibApi(Star):
             return
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
-
+    async def text_to_image_sd(self,config:text2imgConfig):
+        """
+        处理用户发送的消息，获取用户发送的消息和图片链接，构造请求数据
+        """
+        data = {
+            "generateParams":{
+                "checkPointId": config.modelId,
+                "vaeId": "",
+                "prompt":"",
+                "negativePrompt": "bad-artist, bad-artist-anime, bad-hands-5, bad-image-v2-39000, bad-picture-chill-75v, bad_prompt, bad_prompt_version2, badhandv4, NG_DeepNegative_V1_75T, EasyNegative,2girls, 3girls,,bad quality, poor quality, doll, disfigured, jpg, toy, bad anatomy, missing limbs, missing fingers, 3d, cgi",
+                "clipSkip": 2,
+                "sampler": 15,
+                "steps": config.steps,
+                "cfgScale": 7,
+                "width": config.width,
+                "height": config.height,
+                "imgCount": 1,
+                "randnSource": 0,
+                "seed": config.seed,
+                "restoreFaces": 0,
+                "additionalNetwork":[
+                    {
+                        "modelId": config.sd_loraModelId,
+                        "weight": config.sd_loraWeight
+                    }
+                ],
+                "hiResFixInfo":{
+                    "hiresSteps": 28,
+                    "hiresDenoisingStrength": 0.45,
+                    "upscaler": 10,
+                    "resizedWidth": config.width*2,
+                    "resizedHeight": config.height*2
+                },
+                "controlNet":[
+                    {
+                        "unitOrder": 1,
+                        "sourceImage": "",
+                        "width": config.width,
+                        "height": config.height,
+                        "preprocessor":11,
+                        "annotationParameters": {
+                            "openposeHand": {
+                                "preprocessorResolution": 512
+                            }
+                        },
+                        "model": "cf63d214734760dcdc108b1bd094921b",
+                        "controlWeight": 1,
+                        "startingControlStep": 0,
+                        "endingControlStep": 1,
+                        "pixelPerfect": 1,
+                        "controlMode": 0,
+                        "resizeMode": 1,
+                        "maskImage": ""
+                    },
+                    {
+                        "unitOrder": 2,
+                        "sourceImage": "",
+                        "width": config.width,
+                        "height": config.height,
+                        "preprocessor":3,
+                        "annotationParameters": {
+                            "depthLeres": {
+                                "preprocessorResolution": 1024,
+                                "removeNear": 0,
+                                "removeBackground": 0
+                            }
+                        },
+                        "model": "cf63d214734760dcdc108b1bd094921b",
+                        "controlWeight": 0.7,
+                        "startingControlStep": 0,
+                        "endingControlStep": 1,
+                        "pixelPerfect": 1,
+                        "controlMode": 0,
+                        "resizeMode": 1,
+                        "maskImage": ""
+                    }
+                ]
+            }
+        }
+        contorlNet_model = {
+            "基础算法 v1.5":{
+                "Depth":{
+                    "control_v11f1p_sd15_depth":"cf63d214734760dcdc108b1bd094921b",
+                    "t2iadapter_depth_sd15v2":"f08a4a889b56d4099e8a947503cabc14"
+                },
+                "OpenPose":{
+                    "control_v11p_sd15_openpose":"b46dd34ef9c2fe189446599d62516cbf",
+                    "t2iadapter_openpose_sd14v1":"5a8b19a8809e00be4e17517e8ab174ad",
+                    "control_v11p_sd15_densepose_fp16":"3b4e0830d45c11ee9b5e00163e365853"
+                },
+                "vae":{
+                    "vae-ft-mse-840000-ema-pruned.safetensors":"2c1a337416e029dd65ab58784e8a4763",
+                    "klF8Anime2VAE_klF8Anime2VAE.ckpt":"d4a03b32d8d59552194a9453297180c1",
+                    "color101VAE_v1.pt":"d9be20ad5a7195ff0d97925e5afc7912"
+                 }
+            },
+            "基础算法 XL":{
+                "Depth":{
+                    "xinsir_controlnet_depth_sdxl_1.0":"6349e9dae8814084bd9c1585d335c24c"
+                 },
+                 "OpenPose":{
+                    "xinsir_controlnet-openpose-sdxl-1.0":"23ef8ab803d64288afdb7106b8967a55"
+                 },
+                 "vae":{
+                    "sd_xl_vae_1.0":"3cefd3e4af2b8effb230b960da41a980"
+                 }
+            }
+        }
+        modelid = await self.check_modelId(config.modelId)
+        loraid = await self.check_modelId(config.sd_loraModelId)
+        if not config.isSdLora:
+            logger.info("未检测到lora模型，关闭lora")
+            del data.get("generateParams")["additionalNetwork"]
+        else:
+            if modelid["code"] != 0 or loraid["code"] != 0:
+                return {"code": 1, "msg": "模型ID获取错误"}
+            if modelid["baseAlgoName"]!= "基础算法 v1.5" and modelid["baseAlgoName"]!= "基础算法 XL":
+                return {"code": 1, "msg": "sd模式中只能使用基础算法 v1.5或基础算法 XL模型"}
+            if modelid["baseAlgoName"] != loraid["baseAlgoName"]:
+                return {"code": 1, "msg": "模型基础算法和lora模型基础算法不一致，请在配置文件中设置算法一致的模型"}
+        if modelid["baseAlgoName"]== "基础算法 v1.5":
+            data.get("generateParams")["controlNet"][0]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("OpenPose").get("control_v11p_sd15_openpose")
+            data.get("generateParams")["controlNet"][1]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("Depth").get("control_v11f1p_sd15_depth")
+            logger.info("检测到使用基础算法 v1.5模型，切换为control"+data.get("generateParams")["controlNet"][0]["model"])
+        elif modelid["baseAlgoName"]== "基础算法 XL":
+            data.get("generateParams")["controlNet"][0]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("OpenPose").get("xinsir_controlnet-openpose-sdxl-1.0")
+            data.get("generateParams")["controlNet"][1]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("Depth").get("xinsir_controlnet_depth_sdxl_1.0")
+            logger.info("检测到使用基础算法 XL模型，切换为control"+data.get("generateParams")["controlNet"][0]["model"])
+        prompt = await self.prompt_Translation(config)
+        if prompt is not None:
+            data.get("generateParams")["prompt"] = prompt
+        else:
+            return {"code": 1, "msg": "翻译后提示词为空,请检查prompt_Translation函数"}
+        if config.img_url is not None:
+            logger.info("检测到图片链接，开始上传图片")
+            image_url = await self.get_signature_image_url(config.img_url,self.imgPost_url)
+            data.get("generateParams")["controlNet"][0]["sourceImage"] = image_url
+            data.get("generateParams")["controlNet"][1]["sourceImage"] = image_url
+        else:
+            logger.info("未检测到图片链接,关闭controlnet")
+            del data.get("generateParams")["controlNet"]
+        logger.info("请求数据"+str(data))
+        d_data = await self.run(data, self.text2img_url)
+        re_data = {
+            "code": d_data.get("code",1),
+            "msg": d_data.get("msg",""),
+            "pointsCost":d_data.get("data",{}).get("pointsCost",0),
+            "accountBalance":d_data.get("data",{}).get("accountBalance",0),
+            "imageUrl":d_data.get("data",{}).get("images",[{}])[0].get("imageUrl",None),
+            "seed":d_data.get("data",{}).get("images",[{}])[0].get("seed",None),
+            "prompt":prompt,
+            "modelName": modelid["modelName"],
+            "baseAlgoName": modelid["baseAlgoName"],
+            "loraModelName": loraid["modelName"],
+            "lorabaseAlgoName": modelid["baseAlgoName"]
+        }
+        return re_data
+    async def check_modelId(self,id:str):
+        """
+        检测模型ID
+        """
+        data = {
+            "versionUuid": id,
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url=self.getVersion_url, headers=self.headers, json=data)
+            response.raise_for_status()
+            progress = response.json()
+            if progress["code"]==0:
+                logger.info("模型ID检测成功")
+                re_progress = {
+                    "code": 0,
+                    "msg": "模型ID检测成功",
+                    "versionUuid": progress.get("data",{}).get("versionUuid",None),
+                    "modelName": progress.get("data",{}).get("modelName",None),
+                    "versionName": progress.get("data",{}).get("versionName",None),
+                    "baseAlgoName": progress.get("data",{}).get("baseAlgoName",None)
+                }
+                return re_progress
+            else:
+                logger.info("模型ID检测失败，原因："+str(progress["msg"]))
+                return {"code": 1, "msg": "模型ID检测失败，原因："+str(progress["msg"])}
     async def prompt_Translation(self,config:text2imgConfig):
         """
         处理用户发送的消息，获取用户发送的消息和图片链接，构造请求数据
@@ -664,15 +865,44 @@ class liblibApi(Star):
         image_name = "image"+str(uuid.uuid1())
         image_file = image_name+"."+"png"
         imge_byte = await self.download_image(url)
+        logger.info("图片二进制数据下载成功")
         if imge_byte is None:
             logger.info("图片二进制数据下载下载失败")
             return None
         progress = await self.signature_image(post_url,image_name)
+        logger.info("图片上传请求发起成功")
         if progress is None:
             logger.info("图片上传请求发起失败,未获得签名数据")
             return None
         get_url = await self.upload_image(progress,image_file,imge_byte)
+        logger.info("图片上传成功,图片链接为："+get_url)
         if get_url is None:
             logger.info("图片上传失败,未能获取到图片链接")
             return None
         return get_url
+
+    async def exextract_letters(self,text):
+        latters = re.findall(r"[a-zA-Z]", text)
+        return "".join(latters)+","
+    def has_chinese(self,text):
+        """
+        检查字符串中是否包含中文字符
+        """
+        for char in text:
+            if "\u4e00" <= char <= "\u9fff":
+                return True
+        return False
+    async def LLMmessage(self,event:text2imgConfig,sysPrompt):
+        """
+        调用LLM翻译提示词
+        """
+        Prompt = event.message_str
+        Context = []
+        llm_response = await self.context.get_using_provider().text_chat(
+        prompt=Prompt,
+        session_id=None, # 此已经被废弃
+        contexts=Context, # 也可以用上面获得的用户当前的对话记录 context
+        image_urls=[], # 图片链接，支持路径和网络链接
+        system_prompt=sysPrompt  # 系统提示，可以不传
+    )
+        return llm_response.result_chain.chain[0].text
