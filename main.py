@@ -50,7 +50,7 @@ class text2imgConfig:
         self.translateType = translateType
         self.img_url = img_url
 
-@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.0.8")
+@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.0.9")
 class liblibApi(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
@@ -400,7 +400,7 @@ class liblibApi(Star):
             return {"code": 2, "msg": "设置图片类型错误"}
     async def exextract_letters(self,text):
         latters = re.findall(r"[a-zA-Z]", text)
-        return " ".join(latters)
+        return "".join(latters)+","
     def has_chinese(self,text):
         """
         检查字符串中是否包含中文字符
@@ -488,6 +488,18 @@ class liblibApi(Star):
                 image_url = image_url.replace("https","http")
                 return image_url
         return None
+    @filter.command("ltran")
+    async def ltran(self, event: AstrMessageEvent):
+        """
+        此指令仅翻译提示词。翻译命令格式为/ltran 一个女孩，带着墨镜
+        """
+        message = event.message_obj.message
+        message_str = self.textFilter(message)
+        parts = str(message_str).split(" ",1)
+        prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
+        config = text2imgConfig(message_str=prompt,istranslate=self.istranslate,translateType=self.translateType)# 获取一个新的用户消息实例
+        text = await self.prompt_Translation(config)
+        yield event.plain_result("翻译结果为："+text)
     @filter.command("limg")
     async def limg(self, event: AstrMessageEvent):
         """
@@ -555,7 +567,39 @@ class liblibApi(Star):
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
 
-
+    async def prompt_Translation(self,config:text2imgConfig):
+        """
+        处理用户发送的消息，获取用户发送的消息和图片链接，构造请求数据
+        """
+        if self.has_chinese(config.message_str) and config.istranslate:
+            logger.info("检测到中文，开始翻译提示词")
+            if config.translateType is None:
+                config.translateType = "sd格式提示词"
+                logger.info("未设置翻译类型，默认使用sd格式提示词")
+            if config.translateType == "sd格式提示词":
+                sysPormpt = """
+                stableDiffusion是一款利用深度学习的文生图模型，支持通过使用提示词来产生新的图像，描述要包含或省略的元素。我在这里引入StableDiffusion算法中的Prompt概念，又被称为提示符。
+下面的prompt是用来指导AI绘画模型创作图像的。它们包含了图像的各种细节，如人物的外观、背景、颜色和光线效果，以及图像的主题和风格。这些prompt的格式经常包含括号内的加权数字，用于指定某些细节的重要性或强调。例如，"(masterpiece:1.5)"表示作品质量是非常重要的，多个括号也有类似作用。此外，如果使用中括号，如"{blue hair:white hair:0.3}"，这代表将蓝发和白发加以融合，蓝发占比为0.3。
+以下是用prompt帮助AI模型生成图像的例子:(bestquality),highlydetailed,ultra-detailed,cold,solo,(1girl),(detailedeyes),(shinegoldeneyes),(longliverhair),expressionless,(long sleeves),(puffy sleeves),(white wings),shinehalo,(heavymetal:1.2),(metaljewelry),cross-lacedfootwear (chain),(Whitedoves:1.2)
+对于结果，请直接输出提示词
+                """
+                logger.info("使用sd格式提示词")
+            elif config.translateType == "英语直译(自然语言)":
+                sysPormpt = """
+                你是一个好用的翻译助手。请将我的中文翻译成英文。我发给你所有的话都是需要翻译的内容，你只需要回答翻译结果。翻译结果请符合中文的语言习惯。
+                """
+                logger.info("仅翻译成英语")
+            elif config.translateType == "中译中(ai润色)":
+                sysPormpt = """请对文字润色，润色结果请符合中文的语境习惯。请直接输出润色后的文字"""
+                logger.info("仅进行ai润色")
+            textA = await self.exextract_letters(config.message_str)#提取可能存在的lora提示词
+            textB = await self.LLMmessage(config,sysPormpt)#获取翻译结果
+            uprompt = textA + textB#拼接翻译结果
+            logger.info("翻译完成，翻译结果为："+str(uprompt))
+            return uprompt
+        else:
+            logger.info("未检测到中文，不进行翻译")
+            return config.message_str
     async def download_image(self, url: str):
         """
         下载图片并返回二进制数据
