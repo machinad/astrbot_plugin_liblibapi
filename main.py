@@ -398,7 +398,7 @@ class liblibApi(Star):
         else:
             logger.info("图片类型错误，或者数值超出大小")
             return {"code": 2, "msg": "设置图片类型错误"}
-    async def run(self, data, url, timeout=120):
+    async def run(self, data, url, timeout=240):
         """
         发送任务到生图接口，直到返回image为止，失败抛出异常信息
         """
@@ -419,9 +419,16 @@ class liblibApi(Star):
                     response = await client.post(url=self.generate_url, headers=self.headers, json=data)# 根据已创建的任务id发送请求，进行任务状态查询
                     response.raise_for_status()# 检查响应是否成功
                     progress = response.json()# 获取响应数据
-                    logger.info("当前任务状态为："+str(progress.get("data").get("generateStatus"))+"进度为："+str(progress.get("data").get("percentCompleted")*100)+"%")
+                    try:
+                        logger.info("当前任务状态为："+str(progress.get("data",{}).get("generateStatus",""))+"进度为："+str(progress.get("data",{}).get("percentCompleted","")*100)+"% 已经用时："+str(current_time-start_time)+"秒")
+                    except Exception as e:
+                        logger.info(f"任务状态查询失败，原因：{e}")
                     if progress["data"].get("images") and any(image for image in progress["data"]["images"] if image is not None):
                         logger.info("图片生成完成")
+                        try:
+                            logger.info("图片地址为："+str(progress.get("data",{}).get("images",[{}])[0].get("imageUrl",None)))
+                        except Exception:
+                            logger.info("图片地址为获取失败")
                         return progress
                     time.sleep(self.interval)# 等待一段时间后再次轮询  # noqa: ASYNC251
             else:
@@ -477,7 +484,7 @@ class liblibApi(Star):
         text = await self.prompt_Translation(config)
         yield event.plain_result("翻译结果为："+text)
     @filter.command("lsd")
-    async def ltest(self, event: AstrMessageEvent):
+    async def lsd(self, event: AstrMessageEvent):
         """
         直接调用sd1.5/XL模式(可自定义模型)指令格式为：/lsd 一个女孩，带着墨镜
         """
@@ -512,6 +519,54 @@ class liblibApi(Star):
                 Comp.Plain(f"图片已经生成:"
                            f"\n消耗点数：{progess.get('pointsCost')}，账户余额：{progess.get('accountBalance')}"
                            f"\n使用模型：{progess.get('modelName')}，使用算法：{progess.get('baseAlgoName')}"
+                           f"\n提示词：{progess.get('prompt')}"
+                           f"\n生图种子：{progess.get('seed')}"
+                           ),
+                Comp.Image.fromURL(progess.get("imageUrl","")) # 从 URL 发送图片
+            ]
+            yield event.chain_result(chain)
+        else:
+            yield event.plain_result("图片生成失败，原因："+str(progess.get("msg")))
+    @filter.command("lflux")
+    async def lflux(self, event: AstrMessageEvent):
+        """
+        直接调用flux模式指令格式为：/lflux 一个女孩，带着墨镜
+        """
+        message = event.message_obj.message
+        image_url = self.imageFilter(message)
+        message_str = self.textFilter(message)
+        if image_url is not None:
+            logger.info("检测到有传入图片，但不支持controlnet，已忽略")
+            yield event.plain_result("检测到有传入图片，但不支持controlnet，已忽略")
+            pass
+        parts = str(message_str).split(" ",1)
+        prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
+        config = text2imgConfig(
+            width = self.width,
+            height = self.height,
+            steps = self.steps,
+            seed = self.seed,
+            mgType = str(self.imgType),
+            modelId = self.modelId,
+            sd_loraModelId = self.sd_loraModelId,
+            sd_loraWeight = self.sd_loraWeight,
+            flux_loraModelId = self.flux_loraModelId,
+            flux_loraWeight = self.flux_loraWeight,
+            message_str = prompt,
+            isS = self.isSdLora,
+            isF = self.isFluxLora,
+            confyui_api = self.confyui_api,
+            istranslate=self.istranslate,
+            translateType=self.translateType,
+            img_url=image_url
+        )
+        progess = await self.text_to_image_flux(config)
+        if progess.get("code") == 0:
+            chain = [
+                Comp.At(qq=event.get_sender_id()), # At 消息发送者
+                Comp.Plain(f"图片已经生成:"
+                           f"\n消耗点数：{progess.get('pointsCost')}，账户余额：{progess.get('accountBalance')}"
+                           f"\n使用模型：flux，使用算法：F.1"
                            f"\n提示词：{progess.get('prompt')}"
                            f"\n生图种子：{progess.get('seed')}"
                            ),
@@ -586,9 +641,60 @@ class liblibApi(Star):
             return
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
+    async def text_to_image_flux(self,config:text2imgConfig):
+        """
+        处理用户发送的消息，获取用户发送的消息和图片链接，构造请求数据,flux模式
+        """
+        data = {
+            "templateUuid": "6f7c4652458d4802969f8d089cf5b91f",
+            "generateParams":{
+                "prompt":"",
+                "steps": config.steps,
+                "width": config.width,
+                "height": config.height,
+                "imgCount": 1,
+                "seed": config.seed,
+                "restoreFaces": 0,
+                "additionalNetwork": [
+                    {
+                        "modelId": config.flux_loraModelId,
+                        "weight": config.flux_loraWeight,
+                    }
+                ]
+            }
+        }
+        loraid = await self.check_modelId(config.flux_loraModelId)
+        if not config.isFluxLora:
+            logger.info("未开启lora模型，移除lora")
+            del data["generateParams"]["additionalNetwork"]
+        elif loraid == "F.1":
+            pass
+        else:
+            logger.info("lora模型类型错误，移除lora")
+            del data["generateParams"]["additionalNetwork"]
+        prompt = await self.prompt_Translation(config)
+        data["generateParams"]["prompt"] = prompt
+        logger.info("翻译完成，翻译结果为："+str(prompt))
+        logger.info("请求数据"+str(data))
+        d_data = await self.run(data, self.text2img_url)
+        re_data = {
+            "code": d_data.get("code",1),
+            "msg": d_data.get("msg",""),
+            "pointsCost":d_data.get("data",{}).get("pointsCost",0),
+            "accountBalance":d_data.get("data",{}).get("accountBalance",0),
+            "imageUrl":d_data.get("data",{}).get("images",[{}])[0].get("imageUrl",None),
+            "seed":d_data.get("data",{}).get("images",[{}])[0].get("seed",None),
+            "prompt":prompt,
+            "modelName": "",
+            "baseAlgoName": "",
+            "loraModelName": loraid["modelName"],
+            "lorabaseAlgoName": ""
+        }
+        return re_data
+
     async def text_to_image_sd(self,config:text2imgConfig):
         """
-        处理用户发送的消息，获取用户发送的消息和图片链接，构造请求数据
+        处理用户发送的消息，获取用户发送的消息和图片链接，构造请求数据,sd1.5/XL模式(可自定义模型)
         """
         data = {
             "generateParams":{
@@ -635,7 +741,7 @@ class liblibApi(Star):
                         "controlWeight": 1,
                         "startingControlStep": 0,
                         "endingControlStep": 1,
-                        "pixelPerfect": 1,
+                        "pixelPerfect": 0,
                         "controlMode": 0,
                         "resizeMode": 1,
                         "maskImage": ""
@@ -654,10 +760,10 @@ class liblibApi(Star):
                             }
                         },
                         "model": "cf63d214734760dcdc108b1bd094921b",
-                        "controlWeight": 0.7,
+                        "controlWeight": 0.6,
                         "startingControlStep": 0,
                         "endingControlStep": 1,
-                        "pixelPerfect": 1,
+                        "pixelPerfect": 0,
                         "controlMode": 0,
                         "resizeMode": 1,
                         "maskImage": ""
@@ -707,10 +813,12 @@ class liblibApi(Star):
             if modelid["baseAlgoName"] != loraid["baseAlgoName"]:
                 return {"code": 1, "msg": "模型基础算法和lora模型基础算法不一致，请在配置文件中设置算法一致的模型"}
         if modelid["baseAlgoName"]== "基础算法 v1.5":
+            data.get("generateParams")["vaeId"] = contorlNet_model.get(modelid["baseAlgoName"]).get("vae").get("vae-ft-mse-840000-ema-pruned.safetensors")
             data.get("generateParams")["controlNet"][0]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("OpenPose").get("control_v11p_sd15_openpose")
             data.get("generateParams")["controlNet"][1]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("Depth").get("control_v11f1p_sd15_depth")
             logger.info("检测到使用基础算法 v1.5模型，切换为control"+data.get("generateParams")["controlNet"][0]["model"])
         elif modelid["baseAlgoName"]== "基础算法 XL":
+            data.get("generateParams")["vaeId"] = contorlNet_model.get(modelid["baseAlgoName"]).get("vae").get("sd_xl_vae_1.0")
             data.get("generateParams")["controlNet"][0]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("OpenPose").get("xinsir_controlnet-openpose-sdxl-1.0")
             data.get("generateParams")["controlNet"][1]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("Depth").get("xinsir_controlnet_depth_sdxl_1.0")
             logger.info("检测到使用基础算法 XL模型，切换为control"+data.get("generateParams")["controlNet"][0]["model"])
