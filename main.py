@@ -50,7 +50,7 @@ class text2imgConfig:
         self.translateType = translateType
         self.img_url = img_url
 
-@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.1.1")
+@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.1.2")
 class liblibApi(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
@@ -155,7 +155,7 @@ class liblibApi(Star):
                     "checkPointId": config.modelId,
                     "vaeId": "",
                     "prompt":uPrompt,
-                    "negativePrompt": "bad-artist, bad-artist-anime, bad-hands-5, bad-image-v2-39000, bad-picture-chill-75v, bad_prompt, bad_prompt_version2, badhandv4, NG_DeepNegative_V1_75T, EasyNegative,2girls, 3girls,,bad quality, poor quality, doll, disfigured, jpg, toy, bad anatomy, missing limbs, missing fingers, 3d, cgi",
+                    "negativePrompt": "((EasyNegativeV2_V2.0)),cartoon,lowres,bad anatomy,bad hands,text,error,missing fingers,extra digit,fewer digits,cropped,UnrealisticDream,worst quality,low quality,normal quality,jpeg artifacts,signature,watermark,username,blurry,artist name,young,loli,elf,illustration,worst quality,low quality,(worst quality:1.2),(low quality:1.2),incomplete hand,incomplete finger,incomplete leg,incomplete toe,incomplete limb,monochromaticcolor,Watermarks,seals,advertisements,badproportions,2girls,(low quality, worst quality:1.3),painting,drawing,((((visible hand)))),(((ugly))),(((duplicate))),((morbid)),((mutilated)),[out of frame],extra fingers,mutated hands,((poorly drawn hands)),((poorly drawn face)),(((mutation))),(((deformed))),((ugly)),blurry,((bad anatomy)),(((bad proportions))),((extra limbs)),cloned face,(((disfigured))),out of frame,ugly,extra limbs,(bad anatomy),gross proportions,(malformed limbs),((missing arms)),((missing legs)),(((extra arms))),(((extra legs))),mutated hands,(fused fingers),(too many fingers),(((long neck))),((Low image quality,low resolution)),incomplete hand,incomplete finger,incomplete leg,incomplete toe,incomplete limb,monochromatic color,Watermarks,seals,advertisements,painting,drawing,",
                     "clipSkip": 2,
                     "sampler": 15,
                     "steps": config.steps,
@@ -575,6 +575,49 @@ class liblibApi(Star):
             yield event.chain_result(chain)
         else:
             yield event.plain_result("图片生成失败，原因："+str(progess.get("msg")))
+    @filter.command("lcon")
+    async def lcon(self, event: AstrMessageEvent):
+        """
+        直接调用confyui模式指令格式为：/lcon <提示词><图片>，该模式api默认为高清放大，需要自己去配置文件填写自己的confyui的api，具体使用方法参考文档
+        """
+        message = event.message_obj.message
+        image_url = self.imageFilter(message)
+        message_str = self.textFilter(message)
+        parts = str(message_str).split(" ",1)
+        prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
+        config = text2imgConfig(
+            width = self.width,
+            height = self.height,
+            steps = self.steps,
+            seed = self.seed,
+            mgType = str(self.imgType),
+            modelId = self.modelId,
+            sd_loraModelId = self.sd_loraModelId,
+            sd_loraWeight = self.sd_loraWeight,
+            flux_loraModelId = self.flux_loraModelId,
+            flux_loraWeight = self.flux_loraWeight,
+            message_str = prompt,
+            isS = self.isSdLora,
+            isF = self.isFluxLora,
+            confyui_api = self.confyui_api,
+            istranslate=self.istranslate,
+            translateType=self.translateType,
+            img_url=image_url
+        )
+        progess = await self.text_to_image_confyui(config)
+        if progess.get("code") == 0:
+            chain = [
+                Comp.At(qq=event.get_sender_id()), # At 消息发送者
+                Comp.Plain(f"图片已经生成:"
+                           f"\n消耗点数：{progess.get('pointsCost')}，账户余额：{progess.get('accountBalance')}"
+                           f"\n提示词：{progess.get('prompt')}"
+                           f"\n生图种子：{progess.get('seed')}"
+                           ),
+                Comp.Image.fromURL(progess.get("imageUrl","")) # 从 URL 发送图片
+            ]
+            yield event.chain_result(chain)
+        else:
+            yield event.plain_result("图片生成失败，原因："+str(progess.get("msg")))
     @filter.command("limg")
     async def limg(self, event: AstrMessageEvent):
         """
@@ -641,6 +684,73 @@ class liblibApi(Star):
             return
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
+    async def text_to_image_confyui(self,config:text2imgConfig):
+        """
+        处理用户发送的消息，获取用户发送的消息和图片链接，构造请求数据,confyui模式
+        """
+        url = await self.get_signature_image_url(config.img_url,self.imgPost_url)
+        prompt = await self.prompt_Translation(config)
+        data = """{
+            "templateUuid": "4df2efa0f18d46dc9758803e478eb51c",
+            "generateParams": {
+                "workflowUuid": "fa2e042e32fa4aabbbacc255b4ab2cca",
+                "30":
+                {
+                    "class_type": "LoadImage",
+                    "inputs":
+                    {
+                        "image": "{{img_url}}"
+                        }
+                    },
+                "31":
+                {
+                    "class_type": "ImageScale",
+                    "inputs":
+                    {
+                        "width": {{width}},
+                        "height": {{height}}
+                        }
+                   }
+            }
+        }
+        """
+        if config.confyui_api is not None and config.confyui_api != "":
+            api_str = str(config.confyui_api)
+            api_str = api_str.replace("{{prompt}}", str(prompt))
+            api_str = api_str.replace("{{height}}", str(config.height))
+            api_str = api_str.replace("{{width}}", str(config.width))
+            api_str = api_str.replace("{{steps}}", str(config.steps))
+            api_str = api_str.replace("{{seed}}", str(config.seed))
+            api_str = api_str.replace("{{img_url}}", str(url))
+            try:
+                base_json = json.loads(api_str)
+            except Exception as e:
+                logger.info(f"confyui模式调用文生图接口失败，原因：json类型设置错误{e}")
+        else:
+            if url is None:
+                return {"code": 1, "msg": "confyui模式调用文生图接口失败，原因：图片链接为空,默认为图像放大api，需要传入图片"}
+            api_str = data
+            api_str = api_str.replace("{{prompt}}", str(prompt))
+            api_str = api_str.replace("{{height}}", str(config.height))
+            api_str = api_str.replace("{{width}}", str(config.width))
+            api_str = api_str.replace("{{steps}}", str(config.steps))
+            api_str = api_str.replace("{{seed}}", str(config.seed))
+            api_str = api_str.replace("{{img_url}}", str(url))
+            try:
+                base_json = json.loads(api_str)
+            except Exception as e:
+                logger.info(f"confyui模式调用文生图接口失败，原因：json类型设置错误{e}")
+        d_data = await self.run(base_json, self.confyui_url)
+        re_data = {
+            "code": d_data.get("code",1),
+            "msg": d_data.get("msg",""),
+            "pointsCost":d_data.get("data",{}).get("pointsCost",0),
+            "accountBalance":d_data.get("data",{}).get("accountBalance",0),
+            "imageUrl":d_data.get("data",{}).get("images",[{}])[0].get("imageUrl",None),
+            "seed":d_data.get("data",{}).get("images",[{}])[0].get("seed",None),
+            "prompt":prompt,
+        }
+        return re_data
     async def text_to_image_flux(self,config:text2imgConfig):
         """
         处理用户发送的消息，获取用户发送的消息和图片链接，构造请求数据,flux模式
@@ -903,7 +1013,10 @@ class liblibApi(Star):
                 logger.info("仅进行ai润色")
             textA = await self.exextract_letters(config.message_str)#提取可能存在的lora提示词
             textB = await self.LLMmessage(config,sysPormpt)#获取翻译结果
-            uprompt = textA + textB#拼接翻译结果
+            if textA == "":
+                uprompt = textB#拼接翻译结果
+            else:
+                uprompt = textA + "," + textB#拼接翻译结果
             logger.info("翻译完成，翻译结果为："+str(uprompt))
             return uprompt
         else:
@@ -991,7 +1104,7 @@ class liblibApi(Star):
 
     async def exextract_letters(self,text):
         latters = re.findall(r"[a-zA-Z]", text)
-        return "".join(latters)+","
+        return "".join(latters)
     def has_chinese(self,text):
         """
         检查字符串中是否包含中文字符
