@@ -50,7 +50,7 @@ class text2imgConfig:
         self.translateType = translateType
         self.img_url = img_url
 
-@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.1.2")
+@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.1.3")
 class liblibApi(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
@@ -87,6 +87,22 @@ class liblibApi(Star):
         self.imgPost_url = self.get_imgPost_url(self.ak, self.signature_img_post, self.time_stamp,self.signature_nonce)#图片上传url
         self.getVersion_url = self.get_getVersion_url(self.ak, self.signature_getVersion, self.time_stamp,self.signature_nonce)#获取版本url
         self.path = Path("./data/plugins_data/liblib")
+        self.img_config = text2imgConfig()
+        self.img_config.width = self.width
+        self.img_config.height = self.height
+        self.img_config.steps = self.steps
+        self.img_config.seed = self.seed
+        self.img_config.mgType = self.imgType
+        self.img_config.modelId = self.modelId
+        self.img_config.sd_loraModelId = self.sd_loraModelId
+        self.img_config.sd_loraWeight = self.sd_loraWeight
+        self.img_config.flux_loraModelId = self.flux_loraModelId
+        self.img_config.flux_loraWeight = self.flux_loraWeight
+        self.img_config.isSdLora = self.isSdLora
+        self.img_config.isFluxLora = self.isFluxLora
+        self.img_config.confyui_api = self.confyui_api
+        self.img_config.istranslate = self.istranslate
+        self.img_config.translateType = self.translateType
         super().__init__(context)
     def hmac_sha1(self, key, code):#加密
         hmac_code = hmac.new(key.encode(), code.encode(), hashlib.sha1)
@@ -147,257 +163,17 @@ class liblibApi(Star):
         url = f"https://openapi.liblibai.cloud/api/model/version/get?AccessKey={ak}&Signature={signature}&Timestamp={time_stamp}&SignatureNonce={signature_nonce}"
         return url
     async def text2img(self, config: text2imgConfig):
-        uPrompt = config.message_str
-        model = {
-            "sd1.5/XL模式(可自定义模型)":{
-                "templateUuid": "e10adc3949ba59abbe56e057f20f883e",
-                "generateParams":{
-                    "checkPointId": config.modelId,
-                    "vaeId": "",
-                    "prompt":uPrompt,
-                    "negativePrompt": "((EasyNegativeV2_V2.0)),cartoon,lowres,bad anatomy,bad hands,text,error,missing fingers,extra digit,fewer digits,cropped,UnrealisticDream,worst quality,low quality,normal quality,jpeg artifacts,signature,watermark,username,blurry,artist name,young,loli,elf,illustration,worst quality,low quality,(worst quality:1.2),(low quality:1.2),incomplete hand,incomplete finger,incomplete leg,incomplete toe,incomplete limb,monochromaticcolor,Watermarks,seals,advertisements,badproportions,2girls,(low quality, worst quality:1.3),painting,drawing,((((visible hand)))),(((ugly))),(((duplicate))),((morbid)),((mutilated)),[out of frame],extra fingers,mutated hands,((poorly drawn hands)),((poorly drawn face)),(((mutation))),(((deformed))),((ugly)),blurry,((bad anatomy)),(((bad proportions))),((extra limbs)),cloned face,(((disfigured))),out of frame,ugly,extra limbs,(bad anatomy),gross proportions,(malformed limbs),((missing arms)),((missing legs)),(((extra arms))),(((extra legs))),mutated hands,(fused fingers),(too many fingers),(((long neck))),((Low image quality,low resolution)),incomplete hand,incomplete finger,incomplete leg,incomplete toe,incomplete limb,monochromatic color,Watermarks,seals,advertisements,painting,drawing,",
-                    "clipSkip": 2,
-                    "sampler": 15,
-                    "steps": config.steps,
-                    "cfgScale": 7,
-                    "width": config.width,
-                    "height": config.height,
-                    "imgCount": 1,
-                    "randnSource": 0,
-                    "seed": config.seed,
-                    "restoreFaces": 0,
-                    "additionalNetwork":[
-                        {
-                            "modelId": config.sd_loraModelId,
-                            "weight": config.sd_loraWeight
-                        }
-                    ],
-                    "hiResFixInfo":{
-                        "hiresSteps": 28,
-                        "hiresDenoisingStrength": 0.45,
-                        "upscaler": 10,
-                        "resizedWidth": config.width*2,
-                        "resizedHeight": config.height*2
-                    },
-                    "controlNet":[
-                        {
-                            "unitOrder": 1,
-                            "sourceImage": "",
-                            "width": config.width,
-                            "height": config.height,
-                            "preprocessor": 2,
-                            "annotationParameters":{
-                                "depthMidas":{
-                                    "preprocessorResolution": 512
-                                }
-                            },
-                            "model": "cf63d214734760dcdc108b1bd094921b",
-                            "controlWeight": 1,
-                            "startingControlStep": 0,
-                            "endingControlStep": 1,
-                            "pixelPerfect": 1,
-                            "controlMode": 0,
-                            "resizeMode": 0,
-                            "maskImage": ""
-                        }
-                    ]
-                }
-            },
-            "flux模式":{
-                "templateUuid": "6f7c4652458d4802969f8d089cf5b91f",
-                "generateParams":{
-                    "prompt": uPrompt,
-                    "steps": config.steps,
-                    "width": config.width,
-                    "height": config.height,
-                    "imgCount": 1,
-                    "seed": config.seed,
-                    "restoreFaces": 0,
-                    "additionalNetwork":[
-                        {
-                            "modelId": config.flux_loraModelId,
-                            "weight": config.flux_loraWeight
-                        }
-                    ]
-                }
-            },
-            "confyui模式":{
-                "templateUuid": "4df2efa0f18d46dc9758803e478eb51c",
-                "generateParams": {
-                "5": {
-                    "class_type": "EmptyLatentImage",
-                    "inputs": {
-                        "width": config.width,
-                        "height": config.height,
-                        "batch_size": 1
-                    }
-                },
-                "10": {
-                    "class_type": "UNETLoader",
-                    "inputs": {
-                        "unet_name": "412b427ddb674b4dbab9e5abd5ae6057",
-                        "weight_dtype": "fp8_e4m3fn"
-                    }
-
-                },
-                "11": {
-                    "class_type": "DualCLIPLoader",
-                    "inputs": {
-                        "clip_name1": "clip_l",
-                        "clip_name2": "t5xxl_fp8_e4m3fn",
-                        "type": "flux",
-                        "device": "default"
-                    }
-
-                },
-                "13": {
-                    "class_type": "LoraLoader",
-                    "inputs": {
-                        "lora_name": "92b126744e7b49dfb76202b094d406e9",
-                        "strength_model": 0.6,
-                        "strength_clip": 2
-                    }
-                },
-                "15": {
-                    "class_type": "CLIPTextEncodeFlux",
-                    "inputs": {
-                        "clip_l": "",
-                    "t5xxl": uPrompt,
-                    "guidance": 3.5
-                    }
-
-                 },
-                "16": {
-                    "class_type": "VAELoader",
-                    "inputs": {
-                        "vae_name": "ae.sft"
-                    }
-
-                 },
-                "17": {
-                    "class_type": "FluxSamplerParams+",
-                    "inputs": {
-                        "seed": "49375",
-                        "sampler": "euler",
-                        "scheduler": "simple",
-                        "steps": "15",
-                        "guidance": "3.5",
-                        "max_shift": "",
-                        "base_shift": "",
-                        "denoise": ""
-                    }
-                },
-                "19": {
-                    "class_type": "LoraLoader",
-                    "inputs": {
-                        "lora_name": "60cdd0badb844e039aa3cf0d9908f70e",
-                        "strength_model": 0.6,
-                        "strength_clip": 2
-                    }
-                },
-                "workflowUuid": "f454f4a44bc440ca9427ca48c931598e"
-                }
-            }
-        }
-        if self.has_chinese(config.message_str) and config.istranslate:
-            logger.info("检测到中文，开始翻译提示词")
-            if config.translateType == "sd格式提示词":
-                sysPormpt = """
-                stableDiffusion是一款利用深度学习的文生图模型，支持通过使用提示词来产生新的图像，描述要包含或省略的元素。我在这里引入StableDiffusion算法中的Prompt概念，又被称为提示符。
-下面的prompt是用来指导AI绘画模型创作图像的。它们包含了图像的各种细节，如人物的外观、背景、颜色和光线效果，以及图像的主题和风格。这些prompt的格式经常包含括号内的加权数字，用于指定某些细节的重要性或强调。例如，"(masterpiece:1.5)"表示作品质量是非常重要的，多个括号也有类似作用。此外，如果使用中括号，如"{blue hair:white hair:0.3}"，这代表将蓝发和白发加以融合，蓝发占比为0.3。
-以下是用prompt帮助AI模型生成图像的例子:(bestquality),highlydetailed,ultra-detailed,cold,solo,(1girl),(detailedeyes),(shinegoldeneyes),(longliverhair),expressionless,(long sleeves),(puffy sleeves),(white wings),shinehalo,(heavymetal:1.2),(metaljewelry),cross-lacedfootwear (chain),(Whitedoves:1.2)
-对于结果，请直接输出提示词
-                """
-                logger.info("使用sd格式提示词")
-            elif config.translateType == "英语直译(自然语言)":
-                sysPormpt = """
-                你是一个好用的翻译助手。请将我的中文翻译成英文，将所有非中文的翻译成中文。我发给你所有的话都是需要翻译的内容，你只需要回答翻译结果。翻译结果请符合中文的语言习惯。
-                """
-                logger.info("仅翻译成英语")
-            elif config.translateType == "中译中(ai润色)":
-                sysPormpt = """请对文字润色，润色结果请符合中文的语境习惯。请直接输出润色后的文字"""
-                logger.info("不翻译，仅润色")
-            textA = await self.exextract_letters(config.message_str)#提取可能存在的lora提示词
-            llm_pormpt = text2imgConfig(
-                message_str = config.message_str,
-            )#获取一个新的用户消息实例
-
-            textB = await self.LLMmessage(llm_pormpt,sysPormpt)#获取翻译结果
-            uPrompt = textA + textB#拼接翻译结果
-            model[config.mgType]["generateParams"]["prompt"] = uPrompt#替换prompt
-            logger.info("翻译完成，翻译结果为："+str(uPrompt))
-
-
-        if not config.mgType:
-            logger.info("生图类型为空")
-            return {"code": 1, "msg": "生图模式类型为空，未设置类型"}
         if config.mgType == "sd1.5/XL模式(可自定义模型)":
-            logger.info("当前生图类型为"+str(config.mgType))
-            base_json = model[config.mgType]
-            if config.img_url is not None:
-                image_name = "image"+str(uuid.uuid1())
-                image_file = image_name+"."+"png"
-                image_bt = await self.download_image(config.img_url)
-                progress = await self.signature_image(self.imgPost_url,image_name)
-                if progress.get("code") == 0:
-                    logger.info("图片上传请求发起成功，回调参数为："+str(progress))
-                    base_json["generateParams"]["controlNet"][0]["sourceImage"] = await self.upload_image(progress,image_file,image_bt)
-            else:
-                logger.info("未传入图片，移除controlnet")
-                del base_json["generateParams"]["controlNet"]
-            if not config.isSdLora:
-                logger.info("未开启lora模型，移除lora")
-                del base_json["generateParams"]["additionalNetwork"]
-            logger.info("调用文生图接口:请求体为："+str(base_json))
-
-
-            return await self.run(base_json, self.text2img_url)
-
-
+            progess = await self.text_to_image_sd(config)
+            return progess
         elif config.mgType == "flux模式":
-            logger.info("当前生图类型为"+str(config.mgType))
-            try:
-                base_json = model[config.mgType]
-            except Exception as e:
-                logger.erro(f"flux模式调用文生图接口失败，原因：json类型设置错误{e}")
-                return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：json类型设置错误"}
-
-            if not config.isFluxLora:
-                logger.info("未开启lora模型,移除lora")
-                try:
-                    del base_json["generateParams"]["additionalNetwork"]
-                except Exception as e:
-                    logger.info(f"lora字段删除错误：{e}")
-                    return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：字段删除错误"}
-
-            try:
-                return await self.run(base_json, self.text2img_url)
-            except Exception as e:
-                logger.info(f"flux模式调用文生图请求失败，原因：{e}")
-                return {"code": 1, "msg": "flux模式调用文生图接口失败，原因：请求失败"}
-
+            progess = await self.text_to_image_flux(config)
+            return progess
         elif config.mgType == "confyui模式":
-            if config.confyui_api is not None and config.confyui_api != "":
-                api_str = config.confyui_api.replace("{{prompt}}", uPrompt)
-                api_str = config.confyui_api.replace("{{height}}", config.height)
-                api_str = config.confyui_api.replace("{{width}}", config.width)
-                api_str = config.confyui_api.replace("{{steps}}", config.steps)
-                api_str = config.confyui_api.replace("{{seed}}", config.seed)
-                api_str = config.confyui_api.replace("{{img_url}}", config.img_url)
-                try:
-                    base_json = json.loads(api_str)
-                except Exception as e:
-                    logger.info(f"confyui模式调用文生图接口失败，原因：json类型设置错误{e}")
-                    logger.info(str(api_str))
-                    return {"code": 1, "msg": "confyui模式调用文生图接口失败，原因：json类型设置错误"}
-                logger.info("载入自定义confyui接口")
-            else:
-                base_json = model[config.mgType]
-            logger.info("当前生图类型为"+str(config.mgType))
-            return await self.run(base_json, self.confyui_url)
+            progess = await self.text_to_image_confyui(config)
+            return progess
         else:
-            logger.info("图片类型错误，或者数值超出大小")
-            return {"code": 2, "msg": "设置图片类型错误"}
+            return {"code": 1, "msg": "未设置类型"}
     async def run(self, data, url, timeout=240):
         """
         发送任务到生图接口，直到返回image为止，失败抛出异常信息
@@ -405,6 +181,7 @@ class liblibApi(Star):
         start_time = time.time()  # 记录开始时间
         # 这里提交任务，校验是否提交成功，并且获取任务ID
         async with httpx.AsyncClient() as client:
+            logger.info("正在发起请求,请求体为"+str(data))
             response = await client.post(url=url, headers=self.headers, json=data)
             response.raise_for_status()
             progress = response.json()# 获取响应数据
@@ -427,6 +204,7 @@ class liblibApi(Star):
                         logger.info("图片生成完成")
                         try:
                             logger.info("图片地址为："+str(progress.get("data",{}).get("images",[{}])[0].get("imageUrl",None)))
+                            logger.info("返回原始数据："+str(progress))
                         except Exception:
                             logger.info("图片地址为获取失败")
                         return progress
@@ -493,26 +271,9 @@ class liblibApi(Star):
         message_str = self.textFilter(message)
         parts = str(message_str).split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
-        config = text2imgConfig(
-            width = self.width,
-            height = self.height,
-            steps = self.steps,
-            seed = self.seed,
-            mgType = str(self.imgType),
-            modelId = self.modelId,
-            sd_loraModelId = self.sd_loraModelId,
-            sd_loraWeight = self.sd_loraWeight,
-            flux_loraModelId = self.flux_loraModelId,
-            flux_loraWeight = self.flux_loraWeight,
-            message_str = prompt,
-            isS = self.isSdLora,
-            isF = self.isFluxLora,
-            confyui_api = self.confyui_api,
-            istranslate=self.istranslate,
-            translateType=self.translateType,
-            img_url=image_url
-        )
-        progess = await self.text_to_image_sd(config)
+        self.img_config.img_url = image_url
+        self.img_config.message_str = prompt
+        progess = await self.text_to_image_sd(self.img_config)
         if progess.get("code") == 0:
             chain = [
                 Comp.At(qq=event.get_sender_id()), # At 消息发送者
@@ -522,8 +283,11 @@ class liblibApi(Star):
                            f"\n提示词：{progess.get('prompt')}"
                            f"\n生图种子：{progess.get('seed')}"
                            ),
-                Comp.Image.fromURL(progess.get("imageUrl","")) # 从 URL 发送图片
             ]
+            for i in range(1, 5):
+                url = progess.get(f"imageUrl_{i}","")
+                if url:
+                    chain.append(Comp.Image.fromURL(url))
             yield event.chain_result(chain)
         else:
             yield event.plain_result("图片生成失败，原因："+str(progess.get("msg")))
@@ -541,26 +305,9 @@ class liblibApi(Star):
             pass
         parts = str(message_str).split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
-        config = text2imgConfig(
-            width = self.width,
-            height = self.height,
-            steps = self.steps,
-            seed = self.seed,
-            mgType = str(self.imgType),
-            modelId = self.modelId,
-            sd_loraModelId = self.sd_loraModelId,
-            sd_loraWeight = self.sd_loraWeight,
-            flux_loraModelId = self.flux_loraModelId,
-            flux_loraWeight = self.flux_loraWeight,
-            message_str = prompt,
-            isS = self.isSdLora,
-            isF = self.isFluxLora,
-            confyui_api = self.confyui_api,
-            istranslate=self.istranslate,
-            translateType=self.translateType,
-            img_url=image_url
-        )
-        progess = await self.text_to_image_flux(config)
+        self.img_config.img_url = image_url
+        self.img_config.message_str = prompt
+        progess = await self.text_to_image_flux(self.img_config)
         if progess.get("code") == 0:
             chain = [
                 Comp.At(qq=event.get_sender_id()), # At 消息发送者
@@ -570,8 +317,11 @@ class liblibApi(Star):
                            f"\n提示词：{progess.get('prompt')}"
                            f"\n生图种子：{progess.get('seed')}"
                            ),
-                Comp.Image.fromURL(progess.get("imageUrl","")) # 从 URL 发送图片
             ]
+            for i in range(1, 5):
+                url = progess.get(f"imageUrl_{i}","")
+                if url:
+                    chain.append(Comp.Image.fromURL(url))
             yield event.chain_result(chain)
         else:
             yield event.plain_result("图片生成失败，原因："+str(progess.get("msg")))
@@ -585,26 +335,9 @@ class liblibApi(Star):
         message_str = self.textFilter(message)
         parts = str(message_str).split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
-        config = text2imgConfig(
-            width = self.width,
-            height = self.height,
-            steps = self.steps,
-            seed = self.seed,
-            mgType = str(self.imgType),
-            modelId = self.modelId,
-            sd_loraModelId = self.sd_loraModelId,
-            sd_loraWeight = self.sd_loraWeight,
-            flux_loraModelId = self.flux_loraModelId,
-            flux_loraWeight = self.flux_loraWeight,
-            message_str = prompt,
-            isS = self.isSdLora,
-            isF = self.isFluxLora,
-            confyui_api = self.confyui_api,
-            istranslate=self.istranslate,
-            translateType=self.translateType,
-            img_url=image_url
-        )
-        progess = await self.text_to_image_confyui(config)
+        self.img_config.img_url = image_url
+        self.img_config.message_str = prompt
+        progess = await self.text_to_image_confyui(self.img_config)
         if progess.get("code") == 0:
             chain = [
                 Comp.At(qq=event.get_sender_id()), # At 消息发送者
@@ -613,8 +346,11 @@ class liblibApi(Star):
                            f"\n提示词：{progess.get('prompt')}"
                            f"\n生图种子：{progess.get('seed')}"
                            ),
-                Comp.Image.fromURL(progess.get("imageUrl","")) # 从 URL 发送图片
             ]
+            for i in range(1, 5):
+                url = progess.get(f"imageUrl_{i}","")
+                if url:
+                    chain.append(Comp.Image.fromURL(url))
             yield event.chain_result(chain)
         else:
             yield event.plain_result("图片生成失败，原因："+str(progess.get("msg")))
@@ -623,65 +359,36 @@ class liblibApi(Star):
         """
         使用文生图，比如/limg 1girl或是/limg 一个男孩，穿红色衣服
         """
-        #user_name = event.get_sender_name()# 发送消息的用户昵称
-        #yield event.plain_result(f"开始生成图片，当前类型为："+self.imgType)
-        #message_str = event.message_str # 用户发的纯文本消息字符串
         message = event.message_obj.message# 用户发的消息对象
         image_url = self.imageFilter(message)
         message_str = self.textFilter(message)
         parts = str(message_str).split(" ",1)
         prompt = parts[1].strip() if len(parts) > 1 else ""# 获取用户发送的消息
-        textImgageConfig = text2imgConfig(
-            width = self.width,
-            height = self.height,
-            steps = self.steps,
-            seed = self.seed,
-            mgType = str(self.imgType),
-            modelId = self.modelId,
-            sd_loraModelId = self.sd_loraModelId,
-            sd_loraWeight = self.sd_loraWeight,
-            flux_loraModelId = self.flux_loraModelId,
-            flux_loraWeight = self.flux_loraWeight,
-            message_str = prompt,
-            isS = self.isSdLora,
-            isF = self.isFluxLora,
-            confyui_api = self.confyui_api,
-            istranslate=self.istranslate,
-            translateType=self.translateType,
-            img_url=image_url
-        )# 构造请求数据
-        #yield event.plain_result(f"获取用户原始数据")
-
-
-        #yield event.plain_result(f"提取提示词"+prompt)
-
-        #yield event.plain_result(f"配置实例初始化完成")
+        self.img_config.img_url = image_url
+        self.img_config.message_str = prompt
         try:
-            Progess = await self.text2img(textImgageConfig)# 发送请求
+            progess = await self.text2img(self.img_config)# 发送请求
         except Exception as e:
             yield event.plain_result(f"调用文生图接口失败，原因：{e}")
             return
-        #yield event.plain_result(f"调用文生图接口")
-        #yield event.plain_result("回调参数"+str(Progess))
-        logger.info(str(Progess))# 返回原始信息
-        code = Progess.get("code",None)# 获取状态码
-        msg = Progess.get("msg",None)#获取错误信息
-        if code == 0:
-            pointsCost = Progess.get("data",{}).get("pointsCost",None)# 获取消耗点数
-            accountBalance = Progess.get("data",{}).get("accountBalance",None)# 获取账户余额
-            img_url = Progess.get("data",{}).get("images",[{}])[0].get("imageUrl",None)# 获取图片链接
+        if progess.get("code") == 0:
             chain = [
                 Comp.At(qq=event.get_sender_id()), # At 消息发送者
-                Comp.Plain(f"图片已经生成，消耗点数：{pointsCost}，账户余额：{accountBalance}"), # 发送文本消息
-                Comp.Image.fromURL(img_url) # 从 URL 发送图片
+                Comp.Plain(f"图片已经生成:"
+                           f"\n当前使用模式：{self.img_config.mgType}"
+                           f"\n消耗点数：{progess.get('pointsCost')}，账户余额：{progess.get('accountBalance')}"
+                           f"\n使用模型：{progess.get('modelName')}，使用算法：{progess.get('baseAlgoName')}"
+                           f"\n提示词：{progess.get('prompt')}"
+                           f"\n生图种子：{progess.get('seed')}"
+                           )
             ]
+            for i in range(1, 5):
+                url = progess.get(f"imageUrl_{i}","")
+                if url:
+                    chain.append(Comp.Image.fromURL(url))
             yield event.chain_result(chain)
-            message_chain = event.get_messages()
-            logger.info(message_chain)
-            return
         else:
-            yield event.plain_result(f"图片生成失败，状态码:{code} 原因：{msg}")
-            return
+            yield event.plain_result("图片生成失败，原因："+str(progess.get("msg")))
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
     async def text_to_image_confyui(self,config:text2imgConfig):
@@ -746,10 +453,19 @@ class liblibApi(Star):
             "msg": d_data.get("msg",""),
             "pointsCost":d_data.get("data",{}).get("pointsCost",0),
             "accountBalance":d_data.get("data",{}).get("accountBalance",0),
-            "imageUrl":d_data.get("data",{}).get("images",[{}])[0].get("imageUrl",None),
+            "imageUrl_1":"",
+            "imageUrl_2":"",
+            "imageUrl_3":"",
+            "imageUrl_4":"",
             "seed":d_data.get("data",{}).get("images",[{}])[0].get("seed",None),
             "prompt":prompt,
+            "modelName": "",
+            "baseAlgoName": "",
+            "loraModelName": "",
+            "lorabaseAlgoName": ""
         }
+        for i in range(0,len(d_data.get("data",{}).get("images",[{}]))):
+            re_data["imageUrl_"+str(i+1)] = d_data.get("data",{}).get("images",[{}])[i].get("imageUrl",None)
         return re_data
     async def text_to_image_flux(self,config:text2imgConfig):
         """
@@ -792,7 +508,10 @@ class liblibApi(Star):
             "msg": d_data.get("msg",""),
             "pointsCost":d_data.get("data",{}).get("pointsCost",0),
             "accountBalance":d_data.get("data",{}).get("accountBalance",0),
-            "imageUrl":d_data.get("data",{}).get("images",[{}])[0].get("imageUrl",None),
+            "imageUrl_1":"",
+            "imageUrl_2":"",
+            "imageUrl_3":"",
+            "imageUrl_4":"",
             "seed":d_data.get("data",{}).get("images",[{}])[0].get("seed",None),
             "prompt":prompt,
             "modelName": "",
@@ -800,6 +519,8 @@ class liblibApi(Star):
             "loraModelName": loraid["modelName"],
             "lorabaseAlgoName": ""
         }
+        for i in range(0,len(d_data.get("data",{}).get("images",[{}]))):
+            re_data["imageUrl_"+str(i+1)] = d_data.get("data",{}).get("images",[{}])[i].get("imageUrl",None)
         return re_data
 
     async def text_to_image_sd(self,config:text2imgConfig):
@@ -952,7 +673,10 @@ class liblibApi(Star):
             "msg": d_data.get("msg",""),
             "pointsCost":d_data.get("data",{}).get("pointsCost",0),
             "accountBalance":d_data.get("data",{}).get("accountBalance",0),
-            "imageUrl":d_data.get("data",{}).get("images",[{}])[0].get("imageUrl",None),
+            "imageUrl_1":"",
+            "imageUrl_2":"",
+            "imageUrl_3":"",
+            "imageUrl_4":"",
             "seed":d_data.get("data",{}).get("images",[{}])[0].get("seed",None),
             "prompt":prompt,
             "modelName": modelid["modelName"],
@@ -960,6 +684,8 @@ class liblibApi(Star):
             "loraModelName": loraid["modelName"],
             "lorabaseAlgoName": modelid["baseAlgoName"]
         }
+        for i in range(0,len(d_data.get("data",{}).get("images",[{}]))):
+            re_data["imageUrl_"+str(i+1)] = d_data.get("data",{}).get("images",[{}])[i].get("imageUrl",None)
         return re_data
     async def check_modelId(self,id:str):
         """
@@ -985,7 +711,7 @@ class liblibApi(Star):
                 return re_progress
             else:
                 logger.info("模型ID检测失败，原因："+str(progress["msg"]))
-                return {"code": 1, "msg": "模型ID检测失败，原因："+str(progress["msg"])}
+                return {"code": 1, "msg": "模型ID检测失败，原因："+str(progress["msg"]),"versionUuid": "","modelName": "","versionName":"","baseAlgoName":""}
     async def prompt_Translation(self,config:text2imgConfig):
         """
         处理用户发送的消息，获取用户发送的消息和图片链接，构造请求数据
