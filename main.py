@@ -50,7 +50,7 @@ class text2imgConfig:
         self.translateType = translateType
         self.img_url = img_url
 
-@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.1.3")
+@register("liblibApi", "machinad", "调用liblib进行文生图、图生图、可以自己换大模型,lora模型，支持contorlnet控制，支持自定义confyuiAPI", "1.1.4")
 class liblibApi(Star):
     def __init__(self, context: Context, config: dict, interval=5):
         self.ak = config.get("AccessKey")#获取ak
@@ -649,7 +649,7 @@ class liblibApi(Star):
             data.get("generateParams")["controlNet"][1]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("Depth").get("control_v11f1p_sd15_depth")
             logger.info("检测到使用基础算法 v1.5模型，切换为control"+data.get("generateParams")["controlNet"][0]["model"])
         elif modelid["baseAlgoName"]== "基础算法 XL":
-            data.get("generateParams")["vaeId"] = contorlNet_model.get(modelid["baseAlgoName"]).get("vae").get("sd_xl_vae_1.0")
+            #data.get("generateParams")["vaeId"] = contorlNet_model.get(modelid["baseAlgoName"]).get("vae").get("sd_xl_vae_1.0")
             data.get("generateParams")["controlNet"][0]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("OpenPose").get("xinsir_controlnet-openpose-sdxl-1.0")
             data.get("generateParams")["controlNet"][1]["model"] = contorlNet_model.get(modelid["baseAlgoName"]).get("Depth").get("xinsir_controlnet_depth_sdxl_1.0")
             logger.info("检测到使用基础算法 XL模型，切换为control"+data.get("generateParams")["controlNet"][0]["model"])
